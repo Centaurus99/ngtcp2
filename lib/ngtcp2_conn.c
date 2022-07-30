@@ -11183,7 +11183,8 @@ int ngtcp2_conn_set_remote_transport_params(
         conn->negotiated_version;
 
     ngtcp2_log_info(&conn->log, NGTCP2_LOG_EVENT_CON,
-                    "the negotiated version is %08x", conn->negotiated_version);
+                    "the negotiated version is 0x%08x",
+                    conn->negotiated_version);
   } else {
     rv = conn_client_validate_transport_params(conn, params);
     if (rv != 0) {
@@ -12336,7 +12337,7 @@ int ngtcp2_conn_shutdown_stream(ngtcp2_conn *conn, int64_t stream_id,
 
   strm = ngtcp2_conn_find_stream(conn, stream_id);
   if (strm == NULL) {
-    return NGTCP2_ERR_STREAM_NOT_FOUND;
+    return 0;
   }
 
   rv = conn_shutdown_stream_read(conn, strm, app_error_code);
@@ -12358,7 +12359,7 @@ int ngtcp2_conn_shutdown_stream_write(ngtcp2_conn *conn, int64_t stream_id,
 
   strm = ngtcp2_conn_find_stream(conn, stream_id);
   if (strm == NULL) {
-    return NGTCP2_ERR_STREAM_NOT_FOUND;
+    return 0;
   }
 
   return conn_shutdown_stream_write(conn, strm, app_error_code);
@@ -12370,7 +12371,7 @@ int ngtcp2_conn_shutdown_stream_read(ngtcp2_conn *conn, int64_t stream_id,
 
   strm = ngtcp2_conn_find_stream(conn, stream_id);
   if (strm == NULL) {
-    return NGTCP2_ERR_STREAM_NOT_FOUND;
+    return 0;
   }
 
   return conn_shutdown_stream_read(conn, strm, app_error_code);
@@ -12418,7 +12419,7 @@ int ngtcp2_conn_extend_max_stream_offset(ngtcp2_conn *conn, int64_t stream_id,
 
   strm = ngtcp2_conn_find_stream(conn, stream_id);
   if (strm == NULL) {
-    return NGTCP2_ERR_STREAM_NOT_FOUND;
+    return 0;
   }
 
   return conn_extend_max_stream_offset(conn, strm, datalen);

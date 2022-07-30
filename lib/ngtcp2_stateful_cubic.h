@@ -45,7 +45,7 @@ typedef struct ngtcp2_scubic_state {
 } ngtcp2_scubic_state;
 
 int ngtcp2_cc_scubic_cc_init(ngtcp2_cc *cc, ngtcp2_log *log,
-                            const ngtcp2_mem *mem);
+                             ngtcp2_conn_stat *cstat, const ngtcp2_mem *mem);
 
 void ngtcp2_cc_scubic_cc_free(ngtcp2_cc *cc, const ngtcp2_mem *mem);
 
@@ -54,34 +54,36 @@ void ngtcp2_scubic_cc_init(ngtcp2_scubic_cc *cc, ngtcp2_log *log);
 void ngtcp2_scubic_cc_free(ngtcp2_scubic_cc *cc);
 
 void ngtcp2_cc_scubic_cc_on_pkt_acked(ngtcp2_cc *cc, ngtcp2_conn_stat *cstat,
-                                     const ngtcp2_cc_pkt *pkt,
-                                     ngtcp2_tstamp ts);
+                                      const ngtcp2_cc_pkt *pkt,
+                                      ngtcp2_tstamp ts);
 
-void ngtcp2_cc_scubic_cc_congestion_event(ngtcp2_cc *cc, ngtcp2_conn_stat *cstat,
-                                         ngtcp2_tstamp sent_ts,
-                                         ngtcp2_tstamp ts);
+void ngtcp2_cc_scubic_cc_congestion_event(ngtcp2_cc *cc,
+                                          ngtcp2_conn_stat *cstat,
+                                          ngtcp2_tstamp sent_ts,
+                                          ngtcp2_tstamp ts);
 
 void ngtcp2_cc_scubic_cc_on_spurious_congestion(ngtcp2_cc *ccx,
-                                               ngtcp2_conn_stat *cstat,
-                                               ngtcp2_tstamp ts);
+                                                ngtcp2_conn_stat *cstat,
+                                                ngtcp2_tstamp ts);
 
 void ngtcp2_cc_scubic_cc_on_persistent_congestion(ngtcp2_cc *cc,
-                                                 ngtcp2_conn_stat *cstat,
-                                                 ngtcp2_tstamp ts);
+                                                  ngtcp2_conn_stat *cstat,
+                                                  ngtcp2_tstamp ts);
 
 void ngtcp2_cc_scubic_cc_on_ack_recv(ngtcp2_cc *cc, ngtcp2_conn_stat *cstat,
-                                    const ngtcp2_cc_ack *ack, ngtcp2_tstamp ts);
+                                     const ngtcp2_cc_ack *ack,
+                                     ngtcp2_tstamp ts);
 
 void ngtcp2_cc_scubic_cc_on_pkt_sent(ngtcp2_cc *cc, ngtcp2_conn_stat *cstat,
-                                    const ngtcp2_cc_pkt *pkt);
+                                     const ngtcp2_cc_pkt *pkt);
 
 void ngtcp2_cc_scubic_cc_new_rtt_sample(ngtcp2_cc *cc, ngtcp2_conn_stat *cstat,
-                                       ngtcp2_tstamp ts);
+                                        ngtcp2_tstamp ts);
 
 void ngtcp2_cc_scubic_cc_reset(ngtcp2_cc *cc, ngtcp2_conn_stat *cstat,
-                              ngtcp2_tstamp ts);
+                               ngtcp2_tstamp ts);
 
 void ngtcp2_cc_scubic_cc_event(ngtcp2_cc *cc, ngtcp2_conn_stat *cstat,
-                              ngtcp2_cc_event_type event, ngtcp2_tstamp ts);
+                               ngtcp2_cc_event_type event, ngtcp2_tstamp ts);
 
 #endif /* NGTCP2_STATEFUL_CC_H */

@@ -1197,7 +1197,8 @@ static int conn_new(ngtcp2_conn **pconn, const ngtcp2_cid *dcid,
     }
     break;
   case NGTCP2_CC_ALGO_SCUBIC:
-    rv = ngtcp2_cc_scubic_cc_init(&(*pconn)->cc, &(*pconn)->log, mem);
+    rv = ngtcp2_cc_scubic_cc_init(&(*pconn)->cc, &(*pconn)->log,
+                                  &(*pconn)->cstat, mem);
     if (rv != 0) {
       goto fail_cc_init;
     }

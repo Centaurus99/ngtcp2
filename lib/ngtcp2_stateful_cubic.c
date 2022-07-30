@@ -55,7 +55,7 @@ void ngtcp2_scubic_cc_init(ngtcp2_scubic_cc *cc, ngtcp2_log *log) {
 void ngtcp2_scubic_cc_free(ngtcp2_scubic_cc *cc) { (void)cc; }
 
 int ngtcp2_cc_scubic_cc_init(ngtcp2_cc *cc, ngtcp2_log *log,
-                            const ngtcp2_mem *mem) {
+                             ngtcp2_conn_stat *cstat, const ngtcp2_mem *mem) {
   ngtcp2_scubic_cc *scubic_cc;
 
   scubic_cc = ngtcp2_mem_calloc(mem, 1, sizeof(ngtcp2_scubic_cc));
@@ -76,20 +76,21 @@ int ngtcp2_cc_scubic_cc_init(ngtcp2_cc *cc, ngtcp2_log *log,
   cc->reset = ngtcp2_cc_scubic_cc_reset;
   cc->event = ngtcp2_cc_scubic_cc_event;
 
-  fprintf(stderr, "ngtcp2_cc_scubic_cc_init: %p\n", cc);
+  if (state.cwnd != 0) {
+    fprintf(stderr, "--------------- STATE ACTIVE ---------------\n");
+    cstat->cwnd = state.cwnd;
+    fprintf(stderr, "----- SET cwnd=%" PRIu64 " -----\n", cstat->cwnd);
+  }
 
   return 0;
 }
 
 void ngtcp2_cc_scubic_cc_free(ngtcp2_cc *cc, const ngtcp2_mem *mem) {
-  ngtcp2_scubic_cc *scubic_cc = ngtcp2_struct_of(cc->ccb, ngtcp2_scubic_cc, ccb);
+  ngtcp2_scubic_cc *scubic_cc =
+      ngtcp2_struct_of(cc->ccb, ngtcp2_scubic_cc, ccb);
 
-  // ++state_count;
-  // for (size_t i = 0; i < state_count; ++i) {
-  //   fprintf(stderr, "state[%zu] = %" PRIu64 "\n", i, state[i].cwnd);
-  // }
-  fprintf(stderr, "state = %" PRIu64 "\n", state.cwnd);
-  fprintf(stderr, "ngtcp2_cc_scubic_cc_free: %p\n", cc);
+  fprintf(stderr, "----- final state = %" PRIu64 " -----\n", state.cwnd);
+  fprintf(stderr, "--------------- END ---------------\n");
 
   ngtcp2_scubic_cc_free(scubic_cc);
   ngtcp2_mem_free(mem, scubic_cc);
@@ -139,8 +140,8 @@ static uint64_t ngtcp2_cbrt(uint64_t n) {
 #define NGTCP2_HS_MAX_ETA (16 * NGTCP2_MILLISECONDS)
 
 void ngtcp2_cc_scubic_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
-                                     const ngtcp2_cc_pkt *pkt,
-                                     ngtcp2_tstamp ts) {
+                                      const ngtcp2_cc_pkt *pkt,
+                                      ngtcp2_tstamp ts) {
   ngtcp2_scubic_cc *cc = ngtcp2_struct_of(ccx->ccb, ngtcp2_scubic_cc, ccb);
   ngtcp2_duration t, min_rtt, eta;
   uint64_t target;
@@ -157,9 +158,9 @@ void ngtcp2_cc_scubic_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
     return;
   }
 
-  // if (cc->target_cwnd && cc->target_cwnd < cstat->cwnd) {
-  //   return;
-  // }
+  if (cc->target_cwnd && cc->target_cwnd < cstat->cwnd) {
+    return;
+  }
 
   if (cstat->cwnd < cstat->ssthresh) {
     /* slow-start */
@@ -196,6 +197,7 @@ void ngtcp2_cc_scubic_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
     }
 
     state = (ngtcp2_scubic_state){cstat->cwnd};
+    fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n", state.cwnd);
     return;
   }
 
@@ -292,12 +294,13 @@ void ngtcp2_cc_scubic_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
 #endif
 
   state = (ngtcp2_scubic_state){cstat->cwnd};
+  fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n", state.cwnd);
 }
 
 void ngtcp2_cc_scubic_cc_congestion_event(ngtcp2_cc *ccx,
-                                         ngtcp2_conn_stat *cstat,
-                                         ngtcp2_tstamp sent_ts,
-                                         ngtcp2_tstamp ts) {
+                                          ngtcp2_conn_stat *cstat,
+                                          ngtcp2_tstamp sent_ts,
+                                          ngtcp2_tstamp ts) {
   ngtcp2_scubic_cc *cc = ngtcp2_struct_of(ccx->ccb, ngtcp2_scubic_cc, ccb);
   uint64_t min_cwnd;
 
@@ -334,11 +337,13 @@ void ngtcp2_cc_scubic_cc_congestion_event(ngtcp2_cc *ccx,
                   cstat->cwnd);
   fprintf(stderr, "reduce cwnd because of packet loss cwnd=%" PRIu64 "\n",
           cstat->cwnd);
+  state = (ngtcp2_scubic_state){cstat->cwnd};
+  fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n", state.cwnd);
 }
 
 void ngtcp2_cc_scubic_cc_on_spurious_congestion(ngtcp2_cc *ccx,
-                                               ngtcp2_conn_stat *cstat,
-                                               ngtcp2_tstamp ts) {
+                                                ngtcp2_conn_stat *cstat,
+                                                ngtcp2_tstamp ts) {
   ngtcp2_scubic_cc *cc = ngtcp2_struct_of(ccx->ccb, ngtcp2_scubic_cc, ccb);
   (void)ts;
 
@@ -372,11 +377,14 @@ void ngtcp2_cc_scubic_cc_on_spurious_congestion(ngtcp2_cc *ccx,
           "spurious congestion is detected and congestion state is "
           "restored cwnd=%" PRIu64 "\n",
           cstat->cwnd);
+
+  state = (ngtcp2_scubic_state){cstat->cwnd};
+  fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n", state.cwnd);
 }
 
 void ngtcp2_cc_scubic_cc_on_persistent_congestion(ngtcp2_cc *ccx,
-                                                 ngtcp2_conn_stat *cstat,
-                                                 ngtcp2_tstamp ts) {
+                                                  ngtcp2_conn_stat *cstat,
+                                                  ngtcp2_tstamp ts) {
   (void)ccx;
   (void)ts;
 
@@ -385,8 +393,8 @@ void ngtcp2_cc_scubic_cc_on_persistent_congestion(ngtcp2_cc *ccx,
 }
 
 void ngtcp2_cc_scubic_cc_on_ack_recv(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
-                                    const ngtcp2_cc_ack *ack,
-                                    ngtcp2_tstamp ts) {
+                                     const ngtcp2_cc_ack *ack,
+                                     ngtcp2_tstamp ts) {
   ngtcp2_scubic_cc *cc = ngtcp2_struct_of(ccx->ccb, ngtcp2_scubic_cc, ccb);
   uint64_t target_cwnd, initcwnd;
   (void)ack;
@@ -416,7 +424,7 @@ void ngtcp2_cc_scubic_cc_on_ack_recv(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
 }
 
 void ngtcp2_cc_scubic_cc_on_pkt_sent(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
-                                    const ngtcp2_cc_pkt *pkt) {
+                                     const ngtcp2_cc_pkt *pkt) {
   ngtcp2_scubic_cc *cc = ngtcp2_struct_of(ccx->ccb, ngtcp2_scubic_cc, ccb);
 #ifdef SCUBIC_PRINT_CC_LOG
   fprintf(stderr, "pkt_sent pkn=%" PRId64 "\n", pkt->pkt_num);
@@ -434,7 +442,7 @@ void ngtcp2_cc_scubic_cc_on_pkt_sent(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
 }
 
 void ngtcp2_cc_scubic_cc_new_rtt_sample(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
-                                       ngtcp2_tstamp ts) {
+                                        ngtcp2_tstamp ts) {
   ngtcp2_scubic_cc *cc = ngtcp2_struct_of(ccx->ccb, ngtcp2_scubic_cc, ccb);
   (void)ts;
 
@@ -448,7 +456,7 @@ void ngtcp2_cc_scubic_cc_new_rtt_sample(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
 }
 
 void ngtcp2_cc_scubic_cc_reset(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
-                              ngtcp2_tstamp ts) {
+                               ngtcp2_tstamp ts) {
   ngtcp2_scubic_cc *cc = ngtcp2_struct_of(ccx->ccb, ngtcp2_scubic_cc, ccb);
   (void)cstat;
   (void)ts;
@@ -457,18 +465,9 @@ void ngtcp2_cc_scubic_cc_reset(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
 }
 
 void ngtcp2_cc_scubic_cc_event(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
-                              ngtcp2_cc_event_type event, ngtcp2_tstamp ts) {
+                               ngtcp2_cc_event_type event, ngtcp2_tstamp ts) {
   ngtcp2_scubic_cc *cc = ngtcp2_struct_of(ccx->ccb, ngtcp2_scubic_cc, ccb);
   ngtcp2_tstamp last_ts;
-
-  if (event == NGTCP2_CC_EVENT_TYPE_TX_START) {
-    fprintf(stderr, "--------------- TX_START ---------------\n");
-    if (state.cwnd != 0) {
-      cstat->cwnd = state.cwnd;
-      fprintf(stderr, "SET cwnd=%" PRIu64 "\n", cstat->cwnd);
-    }
-    return;
-  }
 
   if (event != NGTCP2_CC_EVENT_TYPE_TX_START || cc->epoch_start == UINT64_MAX) {
     return;

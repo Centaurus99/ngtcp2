@@ -780,6 +780,9 @@ static void cc_del(ngtcp2_cc *cc, ngtcp2_cc_algo cc_algo,
   case NGTCP2_CC_ALGO_BBR2:
     ngtcp2_cc_bbr2_cc_free(cc, mem);
     break;
+  case NGTCP2_CC_ALGO_SCUBIC:
+    ngtcp2_cc_scubic_cc_free(cc, mem);
+    break;
   default:
     break;
   }
@@ -1189,6 +1192,12 @@ static int conn_new(ngtcp2_conn **pconn, const ngtcp2_cid *dcid,
     rv = ngtcp2_cc_bbr2_cc_init(&(*pconn)->cc, &(*pconn)->log, &(*pconn)->cstat,
                                 &(*pconn)->rst, settings->initial_ts,
                                 callbacks->rand, &settings->rand_ctx, mem);
+    if (rv != 0) {
+      goto fail_cc_init;
+    }
+    break;
+  case NGTCP2_CC_ALGO_SCUBIC:
+    rv = ngtcp2_cc_scubic_cc_init(&(*pconn)->cc, &(*pconn)->log, mem);
     if (rv != 0) {
       goto fail_cc_init;
     }

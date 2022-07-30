@@ -1676,7 +1676,11 @@ typedef enum ngtcp2_cc_algo {
    * :enum:`NGTCP2_CC_ALGO_BBR2` represents BBR v2.  If BBR v2 is
    * chosen, packet pacing is enabled.
    */
-  NGTCP2_CC_ALGO_BBR2 = 0x03
+  NGTCP2_CC_ALGO_BBR2 = 0x03,
+  /**
+   * :enum:`NGTCP2_CC_ALGO_SCUBIC` represents Stateful Cubic.
+   */
+  NGTCP2_CC_ALGO_SCUBIC = 0x04
 } ngtcp2_cc_algo;
 
 /**

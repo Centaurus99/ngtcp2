@@ -2866,7 +2866,12 @@ int main(int argc, char **argv) {
           config.cc_algo = NGTCP2_CC_ALGO_BBR2;
           break;
         }
-        std::cerr << "cc: specify cubic, reno, bbr, or bbr2" << std::endl;
+        if (strcmp("scubic", optarg) == 0) {
+          config.cc_algo = NGTCP2_CC_ALGO_SCUBIC;
+          break;
+        }
+        std::cerr << "cc: specify cubic, reno, bbr, bbr2 or scubic"
+                  << std::endl;
         exit(EXIT_FAILURE);
       case 20:
         // --initial-rtt

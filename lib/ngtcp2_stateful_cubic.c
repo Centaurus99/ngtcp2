@@ -3,6 +3,8 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <arpa/inet.h>
+#include <stdlib.h>
 
 #define SCUBIC_PRINT_CC_LOG
 
@@ -15,8 +17,74 @@
 #include "ngtcp2_mem.h"
 #include "ngtcp2_rcvry.h"
 
-static ngtcp2_scubic_state state;
-// static size_t state_count = 0;
+#define HASH_SIZE (1 << 10)
+
+static ngtcp2_scubic_state state_hashmap[HASH_SIZE];
+static ngtcp2_scubic_state *current_state;
+
+static size_t hash_address(const ngtcp2_sockaddr *sa) {
+  size_t hash = 0;
+  switch (sa->sa_family) {
+  case AF_INET: {
+    struct sockaddr_in *addr_in = (struct sockaddr_in *)sa;
+    hash = addr_in->sin_addr.s_addr % HASH_SIZE;
+    break;
+  }
+  default: {
+    fprintf(stderr, "Unknown address family\n");
+    break;
+  }
+  }
+  return hash;
+}
+
+static int hash_init(ngtcp2_conn_stat *cstat, const ngtcp2_sockaddr *sa) {
+  current_state = NULL;
+  switch (sa->sa_family) {
+  case AF_INET: {
+    struct sockaddr_in *addr_in = (struct sockaddr_in *)sa;
+    size_t hash = hash_address(sa);
+    fprintf(stderr, "hash: %zu\n", hash);
+    current_state = &state_hashmap[hash];
+    if (state_hashmap[hash].address.s_addr == addr_in->sin_addr.s_addr) {
+      fprintf(stderr, "---------------- STATE  ACTIVE ----------------\n");
+      cstat->cwnd = current_state->cwnd;
+      fprintf(stderr, "----- SET cwnd=%" PRIu64 " -----\n", cstat->cwnd);
+    } else {
+      fprintf(stderr, "--------------- STATE  INACTIVE ---------------\n");
+      current_state->address = addr_in->sin_addr;
+      current_state->cwnd = cstat->cwnd;
+    }
+    return 0;
+  }
+  default: {
+    fprintf(stderr, "Unknown address family\n");
+    return 1;
+  }
+  }
+}
+
+static void straddr(const ngtcp2_sockaddr *sa) {
+  char s[INET6_ADDRSTRLEN > INET_ADDRSTRLEN ? INET6_ADDRSTRLEN
+                                            : INET_ADDRSTRLEN];
+  switch (sa->sa_family) {
+  case AF_INET: {
+    struct sockaddr_in *addr_in = (struct sockaddr_in *)sa;
+    inet_ntop(AF_INET, &(addr_in->sin_addr), s, INET_ADDRSTRLEN);
+    break;
+  }
+  case AF_INET6: {
+    struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6 *)sa;
+    inet_ntop(AF_INET6, &(addr_in6->sin6_addr), s, INET6_ADDRSTRLEN);
+    break;
+  }
+  default: {
+    fprintf(stderr, "Unknown address family\n");
+    break;
+  }
+  }
+  fprintf(stderr, "IP address: %s\n", s);
+}
 
 static int in_congestion_recovery(const ngtcp2_conn_stat *cstat,
                                   ngtcp2_tstamp sent_time) {
@@ -55,8 +123,11 @@ void ngtcp2_scubic_cc_init(ngtcp2_scubic_cc *cc, ngtcp2_log *log) {
 void ngtcp2_scubic_cc_free(ngtcp2_scubic_cc *cc) { (void)cc; }
 
 int ngtcp2_cc_scubic_cc_init(ngtcp2_cc *cc, ngtcp2_log *log,
-                             ngtcp2_conn_stat *cstat, const ngtcp2_mem *mem) {
+                             ngtcp2_conn_stat *cstat, const ngtcp2_mem *mem,
+                             const ngtcp2_path *path) {
   ngtcp2_scubic_cc *scubic_cc;
+
+  fprintf(stderr, "-------------------- START --------------------\n");
 
   scubic_cc = ngtcp2_mem_calloc(mem, 1, sizeof(ngtcp2_scubic_cc));
   if (scubic_cc == NULL) {
@@ -76,11 +147,8 @@ int ngtcp2_cc_scubic_cc_init(ngtcp2_cc *cc, ngtcp2_log *log,
   cc->reset = ngtcp2_cc_scubic_cc_reset;
   cc->event = ngtcp2_cc_scubic_cc_event;
 
-  if (state.cwnd != 0) {
-    fprintf(stderr, "--------------- STATE ACTIVE ---------------\n");
-    cstat->cwnd = state.cwnd;
-    fprintf(stderr, "----- SET cwnd=%" PRIu64 " -----\n", cstat->cwnd);
-  }
+  straddr(path->remote.addr);
+  hash_init(cstat, path->remote.addr);
 
   return 0;
 }
@@ -89,8 +157,11 @@ void ngtcp2_cc_scubic_cc_free(ngtcp2_cc *cc, const ngtcp2_mem *mem) {
   ngtcp2_scubic_cc *scubic_cc =
       ngtcp2_struct_of(cc->ccb, ngtcp2_scubic_cc, ccb);
 
-  fprintf(stderr, "----- final state = %" PRIu64 " -----\n", state.cwnd);
-  fprintf(stderr, "--------------- END ---------------\n");
+  if (current_state != NULL) {
+    fprintf(stderr, "----- final state = %" PRIu64 " -----\n",
+            current_state->cwnd);
+  }
+  fprintf(stderr, "--------------------- END ---------------------\n");
 
   ngtcp2_scubic_cc_free(scubic_cc);
   ngtcp2_mem_free(mem, scubic_cc);
@@ -196,8 +267,11 @@ void ngtcp2_cc_scubic_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
       }
     }
 
-    state = (ngtcp2_scubic_state){cstat->cwnd};
-    fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n", state.cwnd);
+    if (current_state != NULL) {
+      current_state->cwnd = cstat->cwnd;
+      fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n",
+              current_state->cwnd);
+    }
     return;
   }
 
@@ -293,8 +367,11 @@ void ngtcp2_cc_scubic_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
           cc->w_tcp);
 #endif
 
-  state = (ngtcp2_scubic_state){cstat->cwnd};
-  fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n", state.cwnd);
+  if (current_state != NULL) {
+    current_state->cwnd = cstat->cwnd;
+    fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n",
+            current_state->cwnd);
+  }
 }
 
 void ngtcp2_cc_scubic_cc_congestion_event(ngtcp2_cc *ccx,
@@ -337,8 +414,11 @@ void ngtcp2_cc_scubic_cc_congestion_event(ngtcp2_cc *ccx,
                   cstat->cwnd);
   fprintf(stderr, "reduce cwnd because of packet loss cwnd=%" PRIu64 "\n",
           cstat->cwnd);
-  state = (ngtcp2_scubic_state){cstat->cwnd};
-  fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n", state.cwnd);
+  if (current_state != NULL) {
+    current_state->cwnd = cstat->cwnd;
+    fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n",
+            current_state->cwnd);
+  }
 }
 
 void ngtcp2_cc_scubic_cc_on_spurious_congestion(ngtcp2_cc *ccx,
@@ -378,8 +458,11 @@ void ngtcp2_cc_scubic_cc_on_spurious_congestion(ngtcp2_cc *ccx,
           "restored cwnd=%" PRIu64 "\n",
           cstat->cwnd);
 
-  state = (ngtcp2_scubic_state){cstat->cwnd};
-  fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n", state.cwnd);
+  if (current_state != NULL) {
+    current_state->cwnd = cstat->cwnd;
+    fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n",
+            current_state->cwnd);
+  }
 }
 
 void ngtcp2_cc_scubic_cc_on_persistent_congestion(ngtcp2_cc *ccx,

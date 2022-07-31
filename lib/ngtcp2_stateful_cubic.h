@@ -41,11 +41,13 @@ typedef struct ngtcp2_scubic_cc {
 } ngtcp2_scubic_cc;
 
 typedef struct ngtcp2_scubic_state {
+  struct in_addr address;
   uint64_t cwnd;
 } ngtcp2_scubic_state;
 
 int ngtcp2_cc_scubic_cc_init(ngtcp2_cc *cc, ngtcp2_log *log,
-                             ngtcp2_conn_stat *cstat, const ngtcp2_mem *mem);
+                             ngtcp2_conn_stat *cstat, const ngtcp2_mem *mem,
+                             const ngtcp2_path *path);
 
 void ngtcp2_cc_scubic_cc_free(ngtcp2_cc *cc, const ngtcp2_mem *mem);
 

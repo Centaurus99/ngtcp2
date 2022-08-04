@@ -37,3 +37,6 @@ test-driver
 
 build/
 .vscode/
+traces/
+logs/
+data/

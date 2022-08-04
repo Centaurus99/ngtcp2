@@ -6,7 +6,7 @@
 #include <arpa/inet.h>
 #include <stdlib.h>
 
-#define SCUBIC_PRINT_CC_LOG
+// #define SCUBIC_PRINT_CC_LOG
 
 #if defined(_MSC_VER)
 #  include <intrin.h>
@@ -269,8 +269,10 @@ void ngtcp2_cc_scubic_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
 
     if (current_state != NULL) {
       current_state->cwnd = cstat->cwnd;
+#ifdef SCUBIC_PRINT_CC_LOG
       fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n",
               current_state->cwnd);
+#endif
     }
     return;
   }
@@ -369,8 +371,10 @@ void ngtcp2_cc_scubic_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
 
   if (current_state != NULL) {
     current_state->cwnd = cstat->cwnd;
+#ifdef SCUBIC_PRINT_CC_LOG
     fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n",
             current_state->cwnd);
+#endif
   }
 }
 
@@ -416,8 +420,10 @@ void ngtcp2_cc_scubic_cc_congestion_event(ngtcp2_cc *ccx,
           cstat->cwnd);
   if (current_state != NULL) {
     current_state->cwnd = cstat->cwnd;
+#ifdef SCUBIC_PRINT_CC_LOG
     fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n",
             current_state->cwnd);
+#endif
   }
 }
 
@@ -460,8 +466,10 @@ void ngtcp2_cc_scubic_cc_on_spurious_congestion(ngtcp2_cc *ccx,
 
   if (current_state != NULL) {
     current_state->cwnd = cstat->cwnd;
+#ifdef SCUBIC_PRINT_CC_LOG
     fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n",
             current_state->cwnd);
+#endif
   }
 }
 

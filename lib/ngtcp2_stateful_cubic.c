@@ -21,6 +21,7 @@
 
 static ngtcp2_scubic_state state_hashmap[HASH_SIZE];
 static ngtcp2_scubic_state *current_state;
+static int in_setup;
 
 static size_t hash_address(const ngtcp2_sockaddr *sa) {
   size_t hash = 0;
@@ -48,10 +49,12 @@ static int hash_init(ngtcp2_conn_stat *cstat, const ngtcp2_sockaddr *sa) {
     current_state = &state_hashmap[hash];
     if (state_hashmap[hash].address.s_addr == addr_in->sin_addr.s_addr) {
       fprintf(stderr, "---------------- STATE  ACTIVE ----------------\n");
+      in_setup = 4;
       cstat->cwnd = current_state->cwnd;
       fprintf(stderr, "----- SET cwnd=%" PRIu64 " -----\n", cstat->cwnd);
     } else {
       fprintf(stderr, "--------------- STATE  INACTIVE ---------------\n");
+      in_setup = 0;
       current_state->address = addr_in->sin_addr;
       current_state->cwnd = cstat->cwnd;
     }
@@ -490,6 +493,16 @@ void ngtcp2_cc_scubic_cc_on_ack_recv(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
   uint64_t target_cwnd, initcwnd;
   (void)ack;
   (void)ts;
+
+  if (in_setup > 0) {
+    --in_setup;
+    if (in_setup == 0) {
+      cstat->cwnd = cstat->bytes_in_flight;
+      cstat->ssthresh = cstat->cwnd;
+      fprintf(stderr, "----- SET cwnd=%" PRIu64 " -----\n", cstat->cwnd);
+      fprintf(stderr, "------------- EXIT STATEFUL SETUP -------------\n");
+    }
+  }
 
   /* TODO Use sliding window for min rtt measurement */
   /* TODO Use sliding window */

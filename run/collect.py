@@ -138,6 +138,7 @@ def collect(flow_size, rtt, bdw, mul):
 
     ax[id].set_xlabel('Time (ms)')
     ax[id].set_ylabel('Packet Lost (pkts)')
+    ax_2.set_ylabel('CWnd (bytes)')
     ax[id].set_title('Flow 2: RTT', size=15)
     ax[id].set_title('Flow 1 vs Flow 2: CWnd and Packet Lost', size=15)
     id += 1
@@ -165,8 +166,7 @@ def collect(flow_size, rtt, bdw, mul):
 
     ax[id].legend()
     ax[id].set_xlabel('Time (ms)')
-    ax[id].set_ylabel('Packet Lost (pkts)')
-    ax_2.set_ylabel('CWnd (bytes)')
+    ax[id].set_ylabel('Latest RTT (ms)')
     ax[id].set_title('Flow 1 vs Flow 2: Latest RTT', size=15)
     id += 1
 
@@ -192,8 +192,7 @@ def collect(flow_size, rtt, bdw, mul):
 
     ax[id].legend()
     ax[id].set_xlabel('Time (ms)')
-    ax[id].set_ylabel('Packet Lost (pkts)')
-    ax_2.set_ylabel('CWnd (bytes)')
+    ax[id].set_ylabel('Smoothed RTT (ms)')
     ax[id].set_title('Flow 1 vs Flow 2: Smoothed RTT', size=15)
     id += 1
 
@@ -220,8 +219,7 @@ def collect(flow_size, rtt, bdw, mul):
 
     ax[id].legend()
     ax[id].set_xlabel('Time (ms)')
-    ax[id].set_ylabel('Packet Lost (pkts)')
-    ax_2.set_ylabel('CWnd (bytes)')
+    ax[id].set_ylabel('Bytes in Flight (pkts)')
     ax[id].set_title('Flow 1 vs Flow 2: Bytes in Flight', size=15)
     id += 1
 
@@ -271,7 +269,7 @@ def collect(flow_size, rtt, bdw, mul):
 
     ax[id].legend()
     ax[id].set_xlabel('Time (ms)')
-    ax[id].set_ylabel('Packet Lost (pkts)')
+    ax[id].set_ylabel('RTT (ms)')
     ax[id].set_title('Flow 2: RTT', size=15)
     id += 1
 

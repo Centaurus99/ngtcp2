@@ -97,7 +97,7 @@ def collect(flow_size, rtt, bdw, mul):
     fig.set_figheight(25)
     fig.suptitle(
         "RTT: {} ms; BDP: {:.0f} Bytes -> {:.0f} Bytes; Bandwidth: {} Mbps -> {:.1f} Mbps ({:.0%})".format(
-            rtt, bdw * rtt * 62.5, bdw * mul * rtt * 62.5, bdw, bdw * mul, mul), fontsize=20)
+            rtt, bdw * rtt * 125, bdw * mul * rtt * 125, bdw, bdw * mul, mul), fontsize=20)
     id = 0
 
     # ----- Flow 1 vs Flow 2: CWnd and Packet Lost -----

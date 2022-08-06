@@ -34,7 +34,7 @@ do
             echo "Running client"
             echo "--------------------"
             RTT=`echo | awk "{print 2*$DELAY}"`
-            BDP=`echo | awk "{print 1500*$DELAY*$BDW_MUL}"`
+            BDP=`echo | awk "{print 1500*2*$DELAY*$BDW_MUL}"`
             BDW=`echo | awk "{print 12*$BDW_MUL}"`
             echo "RTT: $RTT ms"
             echo "BDP: $BDP Bytes"
@@ -47,7 +47,7 @@ do
 
             echo "--------------------"
             RTT=`echo | awk "{print 2*$DELAY}"`
-            BDP=`echo | awk "{print 1500*$DELAY*$BDW_MUL*$mul}"`
+            BDP=`echo | awk "{print 1500*2*$DELAY*$BDW_MUL*$mul}"`
             BDW=`echo | awk "{print 12*$BDW_MUL*$mul}"`
             echo "RTT: $RTT ms"
             echo "BDP: $BDP Bytes"

@@ -7,6 +7,7 @@
 #include <stdlib.h>
 
 // #define SCUBIC_PRINT_CC_LOG
+// #define SCUBIC_PRINT_ACK
 
 #if defined(_MSC_VER)
 #  include <intrin.h>
@@ -49,7 +50,7 @@ static int hash_init(ngtcp2_conn_stat *cstat, const ngtcp2_sockaddr *sa) {
     current_state = &state_hashmap[hash];
     if (state_hashmap[hash].address.s_addr == addr_in->sin_addr.s_addr) {
       fprintf(stderr, "---------------- STATE  ACTIVE ----------------\n");
-      in_setup = 4;
+      in_setup = 1;
       cstat->cwnd = current_state->cwnd;
       fprintf(stderr, "----- SET cwnd=%" PRIu64 " -----\n", cstat->cwnd);
     } else {
@@ -222,6 +223,24 @@ void ngtcp2_cc_scubic_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
   uint64_t tx, kx, time_delta, delta;
   uint64_t add, tcp_add;
   uint64_t m;
+
+#ifdef SCUBIC_PRINT_ACK
+  fprintf(stderr,
+          "----- PKT ACKED; pkt_num=%" PRIu64 "; pktlen=%" PRIu64
+          "; pktns_id=%d; sent_ts=%" PRIu64 "; tx_in_flight=%" PRIu64
+          "; is_app_limited=%d -----\n",
+          pkt->pkt_num, pkt->pktlen, pkt->pktns_id, pkt->sent_ts,
+          pkt->tx_in_flight, pkt->is_app_limited);
+#endif
+
+  if (in_setup > 0 && pkt->pktns_id == NGTCP2_PKTNS_ID_APPLICATION &&
+      pkt->pkt_num >= 1) {
+    in_setup = 0;
+    cstat->cwnd = cstat->bytes_in_flight;
+    cstat->ssthresh = cstat->cwnd;
+    fprintf(stderr, "----- SET cwnd=%" PRIu64 " -----\n", cstat->cwnd);
+    fprintf(stderr, "------------- EXIT STATEFUL SETUP -------------\n");
+  }
 
   if (pkt->pktns_id == NGTCP2_PKTNS_ID_APPLICATION && cc->window_end != -1 &&
       cc->window_end <= pkt->pkt_num) {
@@ -494,15 +513,12 @@ void ngtcp2_cc_scubic_cc_on_ack_recv(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
   (void)ack;
   (void)ts;
 
-  if (in_setup > 0) {
-    --in_setup;
-    if (in_setup == 0) {
-      cstat->cwnd = cstat->bytes_in_flight;
-      cstat->ssthresh = cstat->cwnd;
-      fprintf(stderr, "----- SET cwnd=%" PRIu64 " -----\n", cstat->cwnd);
-      fprintf(stderr, "------------- EXIT STATEFUL SETUP -------------\n");
-    }
-  }
+#ifdef SCUBIC_PRINT_ACK
+  fprintf(stderr,
+          "----- ACK RECV; prior_bytes_in_flight=%" PRIu64
+          "; bytes_delivered=%" PRIu64 " -----\n",
+          ack->prior_bytes_in_flight, ack->bytes_delivered);
+#endif
 
   /* TODO Use sliding window for min rtt measurement */
   /* TODO Use sliding window */

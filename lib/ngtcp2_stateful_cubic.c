@@ -19,6 +19,7 @@
 #include "ngtcp2_rcvry.h"
 
 #define HASH_SIZE (1 << 10)
+#define BD_SMOOOTH_SIZE 5
 
 static ngtcp2_scubic_state state_hashmap[HASH_SIZE];
 static ngtcp2_scubic_state *current_state;
@@ -48,17 +49,28 @@ static int hash_init(ngtcp2_conn_stat *cstat, const ngtcp2_sockaddr *sa) {
     size_t hash = hash_address(sa);
     fprintf(stderr, "hash: %zu\n", hash);
     current_state = &state_hashmap[hash];
-    if (state_hashmap[hash].address.s_addr == addr_in->sin_addr.s_addr) {
+    if (current_state->address.s_addr == addr_in->sin_addr.s_addr &&
+        current_state->btl_bw != 0) {
       fprintf(stderr, "---------------- STATE  ACTIVE ----------------\n");
+      fprintf(stderr,
+              "----- STATE: btl_bw=%" PRIu64 "; min_rtt=%" PRIu64 "; -----\n",
+              current_state->btl_bw, current_state->min_rtt);
+
       in_setup = 1;
-      cstat->cwnd = current_state->cwnd;
+      cstat->cwnd =
+          current_state->btl_bw * current_state->min_rtt / NGTCP2_SECONDS;
+      cstat->pacing_rate = (double)current_state->btl_bw / NGTCP2_SECONDS;
+
       fprintf(stderr, "----- SET cwnd=%" PRIu64 " -----\n", cstat->cwnd);
+      fprintf(stderr, "----- SET pacing_rate=%lf -----\n", cstat->pacing_rate);
+
     } else {
       fprintf(stderr, "--------------- STATE  INACTIVE ---------------\n");
       in_setup = 0;
       current_state->address = addr_in->sin_addr;
-      current_state->cwnd = cstat->cwnd;
     }
+    current_state->btl_bw = 0;
+    current_state->min_rtt = UINT64_MAX;
     return 0;
   }
   default: {
@@ -88,6 +100,71 @@ static void straddr(const ngtcp2_sockaddr *sa) {
   }
   }
   fprintf(stderr, "IP address: %s\n", s);
+}
+
+static ngtcp2_tstamp circle_start_ts, circle_end_ts;
+static ngtcp2_duration circle_max_duration;
+static uint64_t smooth_btl_bw[BD_SMOOOTH_SIZE], smooth_btl_bw_max;
+static uint64_t bytes_acked_sum, bytes_to_drop;
+
+static void init_smooth_btl_bw(void) {
+  circle_start_ts = circle_end_ts = 0;
+  circle_max_duration = 0;
+  bytes_acked_sum = bytes_to_drop = smooth_btl_bw_max = 0;
+  for (size_t i = 0; i < BD_SMOOOTH_SIZE; ++i) {
+    smooth_btl_bw[i] = 0;
+  }
+}
+
+static void update_smooth_btl_bw(uint64_t bw) {
+  uint64_t max_bw = bw;
+  for (size_t i = BD_SMOOOTH_SIZE - 1; i > 0; --i) {
+    smooth_btl_bw[i] = smooth_btl_bw[i - 1];
+    max_bw = ngtcp2_max(max_bw, smooth_btl_bw[i]);
+  }
+  smooth_btl_bw[0] = bw;
+  smooth_btl_bw_max = max_bw;
+}
+
+static uint64_t smooth_btl_bw_on_ack_recv(ngtcp2_tstamp ts,
+                                          uint64_t bytes_delivered,
+                                          ngtcp2_conn_stat *cstat) {
+  if (circle_start_ts == 0) {
+    circle_start_ts = circle_end_ts = ts;
+  }
+  if (ts - circle_end_ts > circle_max_duration) {
+    circle_max_duration = ts - circle_end_ts;
+    bytes_to_drop = bytes_delivered;
+  }
+  bytes_acked_sum += bytes_delivered;
+  circle_end_ts = ts;
+
+  if (circle_end_ts - circle_start_ts >= cstat->smoothed_rtt) {
+
+#ifdef SCUBIC_PRINT_CC_LOG
+    fprintf(stderr,
+            "----- BLT_BW UPDATE; circle_start_ts=%" PRIu64
+            "; circle_end_ts=%" PRIu64 "; bytes_acked_sum=%" PRIu64
+            "; bytes_to_drop=%" PRIu64 "; circle_max_duration=%" PRIu64
+            " -----\n",
+            circle_start_ts, circle_end_ts, bytes_acked_sum, bytes_to_drop,
+            circle_max_duration);
+#endif
+
+    if (bytes_acked_sum == bytes_to_drop) {
+      update_smooth_btl_bw(bytes_acked_sum * NGTCP2_SECONDS /
+                           (circle_end_ts - circle_start_ts));
+    } else {
+      update_smooth_btl_bw(
+          (bytes_acked_sum - bytes_to_drop) * NGTCP2_SECONDS /
+          (circle_end_ts - circle_start_ts - circle_max_duration));
+    }
+    bytes_acked_sum = bytes_to_drop = 0;
+    circle_start_ts = circle_end_ts;
+    circle_max_duration = 0;
+  }
+
+  return smooth_btl_bw_max;
 }
 
 static int in_congestion_recovery(const ngtcp2_conn_stat *cstat,
@@ -132,6 +209,9 @@ int ngtcp2_cc_scubic_cc_init(ngtcp2_cc *cc, ngtcp2_log *log,
   ngtcp2_scubic_cc *scubic_cc;
 
   fprintf(stderr, "-------------------- START --------------------\n");
+  straddr(path->remote.addr);
+  hash_init(cstat, path->remote.addr);
+  init_smooth_btl_bw();
 
   scubic_cc = ngtcp2_mem_calloc(mem, 1, sizeof(ngtcp2_scubic_cc));
   if (scubic_cc == NULL) {
@@ -151,9 +231,6 @@ int ngtcp2_cc_scubic_cc_init(ngtcp2_cc *cc, ngtcp2_log *log,
   cc->reset = ngtcp2_cc_scubic_cc_reset;
   cc->event = ngtcp2_cc_scubic_cc_event;
 
-  straddr(path->remote.addr);
-  hash_init(cstat, path->remote.addr);
-
   return 0;
 }
 
@@ -162,8 +239,10 @@ void ngtcp2_cc_scubic_cc_free(ngtcp2_cc *cc, const ngtcp2_mem *mem) {
       ngtcp2_struct_of(cc->ccb, ngtcp2_scubic_cc, ccb);
 
   if (current_state != NULL) {
-    fprintf(stderr, "----- final state = %" PRIu64 " -----\n",
-            current_state->cwnd);
+    fprintf(stderr,
+            "----- FINAL STATE: btl_bw=%" PRIu64 "; min_rtt=%" PRIu64
+            "; -----\n",
+            current_state->btl_bw, current_state->min_rtt);
   }
   fprintf(stderr, "--------------------- END ---------------------\n");
 
@@ -235,11 +314,13 @@ void ngtcp2_cc_scubic_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
 
   if (in_setup > 0 && pkt->pktns_id == NGTCP2_PKTNS_ID_APPLICATION &&
       pkt->pkt_num >= 1) {
+    uint64_t initcwnd = ngtcp2_cc_compute_initcwnd(cstat->max_udp_payload_size);
     in_setup = 0;
-    cstat->cwnd = cstat->bytes_in_flight;
+    cstat->cwnd = ngtcp2_max(initcwnd, cstat->bytes_in_flight);
     cstat->ssthresh = cstat->cwnd;
-    fprintf(stderr, "----- SET cwnd=%" PRIu64 " -----\n", cstat->cwnd);
+    cstat->pacing_rate = 0;
     fprintf(stderr, "------------- EXIT STATEFUL SETUP -------------\n");
+    fprintf(stderr, "----- SET cwnd=%" PRIu64 " -----\n", cstat->cwnd);
   }
 
   if (pkt->pktns_id == NGTCP2_PKTNS_ID_APPLICATION && cc->window_end != -1 &&
@@ -287,14 +368,6 @@ void ngtcp2_cc_scubic_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
         cc->w_last_max = cstat->cwnd;
         cstat->ssthresh = cstat->cwnd;
       }
-    }
-
-    if (current_state != NULL) {
-      current_state->cwnd = cstat->cwnd;
-#ifdef SCUBIC_PRINT_CC_LOG
-      fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n",
-              current_state->cwnd);
-#endif
     }
     return;
   }
@@ -390,14 +463,6 @@ void ngtcp2_cc_scubic_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
           pkt->pkt_num, cstat->cwnd, t, cc->k, time_delta >> 4, delta, target,
           cc->w_tcp);
 #endif
-
-  if (current_state != NULL) {
-    current_state->cwnd = cstat->cwnd;
-#ifdef SCUBIC_PRINT_CC_LOG
-    fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n",
-            current_state->cwnd);
-#endif
-  }
 }
 
 void ngtcp2_cc_scubic_cc_congestion_event(ngtcp2_cc *ccx,
@@ -440,13 +505,6 @@ void ngtcp2_cc_scubic_cc_congestion_event(ngtcp2_cc *ccx,
                   cstat->cwnd);
   fprintf(stderr, "reduce cwnd because of packet loss cwnd=%" PRIu64 "\n",
           cstat->cwnd);
-  if (current_state != NULL) {
-    current_state->cwnd = cstat->cwnd;
-#ifdef SCUBIC_PRINT_CC_LOG
-    fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n",
-            current_state->cwnd);
-#endif
-  }
 }
 
 void ngtcp2_cc_scubic_cc_on_spurious_congestion(ngtcp2_cc *ccx,
@@ -485,14 +543,6 @@ void ngtcp2_cc_scubic_cc_on_spurious_congestion(ngtcp2_cc *ccx,
           "spurious congestion is detected and congestion state is "
           "restored cwnd=%" PRIu64 "\n",
           cstat->cwnd);
-
-  if (current_state != NULL) {
-    current_state->cwnd = cstat->cwnd;
-#ifdef SCUBIC_PRINT_CC_LOG
-    fprintf(stderr, "----- CHANGE state=%" PRIu64 " -----\n",
-            current_state->cwnd);
-#endif
-  }
 }
 
 void ngtcp2_cc_scubic_cc_on_persistent_congestion(ngtcp2_cc *ccx,
@@ -516,9 +566,18 @@ void ngtcp2_cc_scubic_cc_on_ack_recv(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
 #ifdef SCUBIC_PRINT_ACK
   fprintf(stderr,
           "----- ACK RECV; prior_bytes_in_flight=%" PRIu64
-          "; bytes_delivered=%" PRIu64 " -----\n",
-          ack->prior_bytes_in_flight, ack->bytes_delivered);
+          "; bytes_delivered=%" PRIu64 "; now_ts=%" PRIu64 " -----\n",
+          ack->prior_bytes_in_flight, ack->bytes_delivered, ts);
 #endif
+
+  if (current_state != NULL) {
+    current_state->btl_bw =
+        smooth_btl_bw_on_ack_recv(ts, ack->bytes_delivered, cstat);
+#ifdef SCUBIC_PRINT_CC_LOG
+    fprintf(stderr, "----- CHANGE btl_bw=%" PRIu64 " -----\n",
+            current_state->btl_bw);
+#endif
+  }
 
   /* TODO Use sliding window for min rtt measurement */
   /* TODO Use sliding window */
@@ -573,6 +632,14 @@ void ngtcp2_cc_scubic_cc_new_rtt_sample(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
   cc->current_round_min_rtt =
       ngtcp2_min(cc->current_round_min_rtt, cstat->latest_rtt);
   ++cc->rtt_sample_count;
+
+  if (current_state != NULL) {
+    current_state->min_rtt = cstat->min_rtt;
+#ifdef SCUBIC_PRINT_CC_LOG
+    fprintf(stderr, "----- CHANGE min_rtt=%" PRIu64 " -----\n",
+            current_state->min_rtt);
+#endif
+  }
 }
 
 void ngtcp2_cc_scubic_cc_reset(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,

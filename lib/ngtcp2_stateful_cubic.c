@@ -332,9 +332,10 @@ void ngtcp2_cc_scubic_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
     return;
   }
 
-  if (cc->target_cwnd && cc->target_cwnd < cstat->cwnd) {
-    return;
-  }
+  /* Has something wrong with Stateful-Cubic */
+  // if (cc->target_cwnd && cc->target_cwnd < cstat->cwnd) {
+  //   return;
+  // }
 
   if (cstat->cwnd < cstat->ssthresh) {
     /* slow-start */
@@ -607,6 +608,8 @@ void ngtcp2_cc_scubic_cc_on_pkt_sent(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
   ngtcp2_scubic_cc *cc = ngtcp2_struct_of(ccx->ccb, ngtcp2_scubic_cc, ccb);
 #ifdef SCUBIC_PRINT_CC_LOG
   fprintf(stderr, "pkt_sent pkn=%" PRId64 "\n", pkt->pkt_num);
+  fprintf(stderr, "delivery_rate_sec=%" PRIu64 "\n", cstat->delivery_rate_sec);
+  fprintf(stderr, "send_quantum=%" PRIu64 "\n", cstat->send_quantum);
 #endif
   (void)cstat;
 

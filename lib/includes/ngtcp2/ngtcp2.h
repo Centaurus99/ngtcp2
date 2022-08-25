@@ -1676,7 +1676,11 @@ typedef enum ngtcp2_cc_algo {
    * :enum:`NGTCP2_CC_ALGO_BBR2` represents BBR v2.  If BBR v2 is
    * chosen, packet pacing is enabled.
    */
-  NGTCP2_CC_ALGO_BBR2 = 0x03
+  NGTCP2_CC_ALGO_BBR2 = 0x03,
+  /**
+   * :enum:`NGTCP2_CC_ALGO_SCUBIC` represents Stateful Cubic.
+   */
+  NGTCP2_CC_ALGO_SCUBIC = 0x04
 } ngtcp2_cc_algo;
 
 /**
@@ -4256,8 +4260,6 @@ NGTCP2_EXTERN int ngtcp2_conn_open_uni_stream(ngtcp2_conn *conn,
  *
  * :macro:`NGTCP2_ERR_NOMEM`
  *     Out of memory
- * :macro:`NGTCP2_ERR_STREAM_NOT_FOUND`
- *     Stream does not exist
  */
 NGTCP2_EXTERN int ngtcp2_conn_shutdown_stream(ngtcp2_conn *conn,
                                               int64_t stream_id,
@@ -4278,8 +4280,6 @@ NGTCP2_EXTERN int ngtcp2_conn_shutdown_stream(ngtcp2_conn *conn,
  *
  * :macro:`NGTCP2_ERR_NOMEM`
  *     Out of memory
- * :macro:`NGTCP2_ERR_STREAM_NOT_FOUND`
- *     Stream does not exist
  */
 NGTCP2_EXTERN int ngtcp2_conn_shutdown_stream_write(ngtcp2_conn *conn,
                                                     int64_t stream_id,
@@ -4299,8 +4299,6 @@ NGTCP2_EXTERN int ngtcp2_conn_shutdown_stream_write(ngtcp2_conn *conn,
  *
  * :macro:`NGTCP2_ERR_NOMEM`
  *     Out of memory
- * :macro:`NGTCP2_ERR_STREAM_NOT_FOUND`
- *     Stream does not exist
  */
 NGTCP2_EXTERN int ngtcp2_conn_shutdown_stream_read(ngtcp2_conn *conn,
                                                    int64_t stream_id,
@@ -4623,8 +4621,8 @@ NGTCP2_EXTERN int ngtcp2_conn_is_in_draining_period(ngtcp2_conn *conn);
  * This function returns 0 if it succeeds, or one of the following
  * negative error codes:
  *
- * :macro:`NGTCP2_ERR_STREAM_NOT_FOUND`
- *     Stream was not found
+ * :macro:`NGTCP2_ERR_NOMEM`
+ *     Out of memory.
  */
 NGTCP2_EXTERN int ngtcp2_conn_extend_max_stream_offset(ngtcp2_conn *conn,
                                                        int64_t stream_id,

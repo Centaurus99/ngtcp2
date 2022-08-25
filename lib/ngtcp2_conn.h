@@ -44,6 +44,7 @@
 #include "ngtcp2_cc.h"
 #include "ngtcp2_bbr.h"
 #include "ngtcp2_bbr2.h"
+#include "ngtcp2_stateful_cubic.h"
 #include "ngtcp2_pv.h"
 #include "ngtcp2_pmtud.h"
 #include "ngtcp2_cid.h"

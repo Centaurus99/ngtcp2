@@ -1164,9 +1164,6 @@ int Handler::http_stop_sending(int64_t stream_id, uint64_t app_error_code) {
       rv != 0) {
     std::cerr << "ngtcp2_conn_shutdown_stream_read: " << ngtcp2_strerror(rv)
               << std::endl;
-    if (rv == NGTCP2_ERR_STREAM_NOT_FOUND) {
-      return 0;
-    }
     return -1;
   }
   return 0;
@@ -1190,9 +1187,6 @@ int Handler::http_reset_stream(int64_t stream_id, uint64_t app_error_code) {
       rv != 0) {
     std::cerr << "ngtcp2_conn_shutdown_stream_write: " << ngtcp2_strerror(rv)
               << std::endl;
-    if (rv == NGTCP2_ERR_STREAM_NOT_FOUND) {
-      return 0;
-    }
     return -1;
   }
   return 0;
@@ -1693,27 +1687,11 @@ int Handler::write_streams() {
       switch (nwrite) {
       case NGTCP2_ERR_STREAM_DATA_BLOCKED:
         assert(ndatalen == -1);
-        if (auto rv = nghttp3_conn_block_stream(httpconn_, stream_id);
-            rv != 0) {
-          std::cerr << "nghttp3_conn_block_stream: " << nghttp3_strerror(rv)
-                    << std::endl;
-          ngtcp2_connection_close_error_set_application_error(
-              &last_error_, nghttp3_err_infer_quic_app_error_code(rv), nullptr,
-              0);
-          return handle_error();
-        }
+        nghttp3_conn_block_stream(httpconn_, stream_id);
         continue;
       case NGTCP2_ERR_STREAM_SHUT_WR:
         assert(ndatalen == -1);
-        if (auto rv = nghttp3_conn_shutdown_stream_write(httpconn_, stream_id);
-            rv != 0) {
-          std::cerr << "nghttp3_conn_shutdown_stream_write: "
-                    << nghttp3_strerror(rv) << std::endl;
-          ngtcp2_connection_close_error_set_application_error(
-              &last_error_, nghttp3_err_infer_quic_app_error_code(rv), nullptr,
-              0);
-          return handle_error();
-        }
+        nghttp3_conn_shutdown_stream_write(httpconn_, stream_id);
         continue;
       case NGTCP2_ERR_WRITE_MORE:
         assert(ndatalen >= 0);
@@ -3564,7 +3542,12 @@ int main(int argc, char **argv) {
           config.cc_algo = NGTCP2_CC_ALGO_BBR2;
           break;
         }
-        std::cerr << "cc: specify cubic, reno, bbr, or bbr2" << std::endl;
+        if (strcmp("scubic", optarg) == 0) {
+          config.cc_algo = NGTCP2_CC_ALGO_SCUBIC;
+          break;
+        }
+        std::cerr << "cc: specify cubic, reno, bbr, bbr2 or scubic"
+                  << std::endl;
         exit(EXIT_FAILURE);
       case 20:
         // --initial-rtt

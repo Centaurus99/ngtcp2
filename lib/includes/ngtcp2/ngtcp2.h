@@ -1680,7 +1680,11 @@ typedef enum ngtcp2_cc_algo {
   /**
    * :enum:`NGTCP2_CC_ALGO_SCUBIC` represents Stateful Cubic.
    */
-  NGTCP2_CC_ALGO_SCUBIC = 0x04
+  NGTCP2_CC_ALGO_SCUBIC = 0x04,
+  /**
+   * :enum:`NGTCP2_CC_ALGO_SCUBIC_2` represents Stateful Cubic 2.
+   */
+  NGTCP2_CC_ALGO_SCUBIC_2 = 0x05
 } ngtcp2_cc_algo;
 
 /**

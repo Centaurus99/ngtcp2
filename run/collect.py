@@ -25,8 +25,8 @@ def get_offset(ax_, x, y):
 def collect(flow_size, rtt, bdw, mul):
     src = "flow{}k_rtt{}_base{}_mul{}".format(flow_size, rtt, bdw, mul)
 
-    filename1 = 'cubic' + '_' + src + '_2.sqlog'
-    filename2 = 'scubic' + '_' + src + '_2.sqlog'
+    filename1 = 'scubic' + '_' + src + '_2.sqlog'
+    filename2 = 'scubic2' + '_' + src + '_2.sqlog'
 
     x_1 = []
     smoothed_rtt_1 = []
@@ -71,6 +71,7 @@ def collect(flow_size, rtt, bdw, mul):
                 if data['time'] not in packet_lost_1:
                     packet_lost_1[data['time']] = 0
                 packet_lost_1[data['time']] += 1
+    print("packet lost sum:", sum(packet_lost_1.values()))
 
     print("loading " + os.path.join(logdir, filename2))
     with open(os.path.join(logdir, filename2), 'r') as f:
@@ -93,6 +94,7 @@ def collect(flow_size, rtt, bdw, mul):
                 if data['time'] not in packet_lost_2:
                     packet_lost_2[data['time']] = 0
                 packet_lost_2[data['time']] += 1
+    print("packet lost sum:", sum(packet_lost_2.values()))
 
     fig, ax = plt.subplots(
         nrows=10,

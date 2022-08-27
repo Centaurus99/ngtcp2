@@ -8,6 +8,7 @@
 
 // #define SCUBIC_PRINT_CC_LOG
 // #define SCUBIC_PRINT_ACK
+#define FAKE_STATE
 
 #if defined(_MSC_VER)
 #  include <intrin.h>
@@ -49,6 +50,11 @@ static int hash_init(ngtcp2_conn_stat *cstat, const ngtcp2_sockaddr *sa) {
     size_t hash = hash_address(sa);
     fprintf(stderr, "hash: %zu\n", hash);
     current_state = &state_hashmap[hash];
+#ifdef FAKE_STATE
+    current_state->address.s_addr = addr_in->sin_addr.s_addr;
+    current_state->btl_bw = 3000000;
+    current_state->min_rtt = 22000000;
+#endif
     if (current_state->address.s_addr == addr_in->sin_addr.s_addr &&
         current_state->btl_bw != 0) {
       fprintf(stderr, "---------------- STATE  ACTIVE ----------------\n");
@@ -143,7 +149,7 @@ static uint64_t smooth_btl_bw_on_ack_recv(ngtcp2_tstamp ts,
 
 #ifdef SCUBIC_PRINT_CC_LOG
     fprintf(stderr,
-            "----- BLT_BW UPDATE; circle_start_ts=%" PRIu64
+            "----- BTL_BW UPDATE; circle_start_ts=%" PRIu64
             "; circle_end_ts=%" PRIu64 "; bytes_acked_sum=%" PRIu64
             "; bytes_to_drop=%" PRIu64 "; circle_max_duration=%" PRIu64
             " -----\n",

@@ -26,7 +26,7 @@ do
             echo "----------------------------------------"
             echo "Testing mul $mul"
 
-            for cc in cubic scubic
+            for cc in scubic scubic2
             do
                 echo "--------------------"
                 echo "Starting "$cc" server"

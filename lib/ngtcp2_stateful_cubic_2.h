@@ -46,9 +46,51 @@ typedef struct ngtcp2_scubic2_state {
   uint64_t min_rtt;
 } ngtcp2_scubic2_state;
 
+typedef struct ngtcp2_rtt_sample {
+  ngtcp2_tstamp sent_ts;
+  ngtcp2_tstamp recv_ts;
+  uint64_t rtt;
+  uint64_t bytes_delivered;
+} ngtcp2_rtt_sample;
+
+/**
+ * @enum
+ *
+ * :type:`ngtcp2_scubic2_setup_phase` defines the startup phases of SCUBIC2.
+ */
+typedef enum ngtcp2_scubic2_setup_phase {
+  /**
+   * :enum:`NGTCP2_SCUBIC2_SETUP_PHASE_INITIAL` is the phase waiting for the
+   * first ACK.
+   */
+  NGTCP2_SCUBIC2_SETUP_PHASE_INITIAL,
+  /**
+   * :enum:`NGTCP2_SCUBIC2_SETUP_PHASE_EST` is the phase waiting for the first
+   * few ACKs to estimate the bottleneck bandwidth.
+   */
+  NGTCP2_SCUBIC2_SETUP_PHASE_EST,
+  /**
+   * :enum:`NGTCP2_SCUBIC2_SETUP_PHASE_DRAIN` is the phase of lowering
+   * congestion windows to drain, which occurs when the actual bandwidth is
+   * lower than the estimated one.
+   */
+  NGTCP2_SCUBIC2_SETUP_PHASE_DRAIN,
+  /**
+   * :enum:`NGTCP2_SCUBIC2_SETUP_PHASE_PROBE` is the phase of up-probing
+   * bandwidth, which occurs when the actual bandwidth is higher than the
+   * estimated one.
+   */
+  NGTCP2_SCUBIC2_SETUP_PHASE_PROBE,
+  /**
+   * :enum:`NGTCP2_SCUBIC2_SETUP_PHASE_END` is the phase in which SCUBIC2 has
+   * ended or is deactivated.
+   */
+  NGTCP2_SCUBIC2_SETUP_PHASE_END,
+} ngtcp2_scubic2_setup_phase;
+
 int ngtcp2_cc_scubic2_cc_init(ngtcp2_cc *cc, ngtcp2_log *log,
-                             ngtcp2_conn_stat *cstat, const ngtcp2_mem *mem,
-                             const ngtcp2_path *path);
+                              ngtcp2_conn_stat *cstat, const ngtcp2_mem *mem,
+                              const ngtcp2_path *path);
 
 void ngtcp2_cc_scubic2_cc_free(ngtcp2_cc *cc, const ngtcp2_mem *mem);
 
@@ -57,36 +99,36 @@ void ngtcp2_scubic2_cc_init(ngtcp2_scubic2_cc *cc, ngtcp2_log *log);
 void ngtcp2_scubic2_cc_free(ngtcp2_scubic2_cc *cc);
 
 void ngtcp2_cc_scubic2_cc_on_pkt_acked(ngtcp2_cc *cc, ngtcp2_conn_stat *cstat,
-                                      const ngtcp2_cc_pkt *pkt,
-                                      ngtcp2_tstamp ts);
+                                       const ngtcp2_cc_pkt *pkt,
+                                       ngtcp2_tstamp ts);
 
 void ngtcp2_cc_scubic2_cc_congestion_event(ngtcp2_cc *cc,
-                                          ngtcp2_conn_stat *cstat,
-                                          ngtcp2_tstamp sent_ts,
-                                          ngtcp2_tstamp ts);
+                                           ngtcp2_conn_stat *cstat,
+                                           ngtcp2_tstamp sent_ts,
+                                           ngtcp2_tstamp ts);
 
 void ngtcp2_cc_scubic2_cc_on_spurious_congestion(ngtcp2_cc *ccx,
-                                                ngtcp2_conn_stat *cstat,
-                                                ngtcp2_tstamp ts);
+                                                 ngtcp2_conn_stat *cstat,
+                                                 ngtcp2_tstamp ts);
 
 void ngtcp2_cc_scubic2_cc_on_persistent_congestion(ngtcp2_cc *cc,
-                                                  ngtcp2_conn_stat *cstat,
-                                                  ngtcp2_tstamp ts);
+                                                   ngtcp2_conn_stat *cstat,
+                                                   ngtcp2_tstamp ts);
 
 void ngtcp2_cc_scubic2_cc_on_ack_recv(ngtcp2_cc *cc, ngtcp2_conn_stat *cstat,
-                                     const ngtcp2_cc_ack *ack,
-                                     ngtcp2_tstamp ts);
+                                      const ngtcp2_cc_ack *ack,
+                                      ngtcp2_tstamp ts);
 
 void ngtcp2_cc_scubic2_cc_on_pkt_sent(ngtcp2_cc *cc, ngtcp2_conn_stat *cstat,
-                                     const ngtcp2_cc_pkt *pkt);
+                                      const ngtcp2_cc_pkt *pkt);
 
 void ngtcp2_cc_scubic2_cc_new_rtt_sample(ngtcp2_cc *cc, ngtcp2_conn_stat *cstat,
-                                        ngtcp2_tstamp ts);
+                                         ngtcp2_tstamp ts);
 
 void ngtcp2_cc_scubic2_cc_reset(ngtcp2_cc *cc, ngtcp2_conn_stat *cstat,
-                               ngtcp2_tstamp ts);
+                                ngtcp2_tstamp ts);
 
 void ngtcp2_cc_scubic2_cc_event(ngtcp2_cc *cc, ngtcp2_conn_stat *cstat,
-                               ngtcp2_cc_event_type event, ngtcp2_tstamp ts);
+                                ngtcp2_cc_event_type event, ngtcp2_tstamp ts);
 
 #endif /* NGTCP2_STATEFUL_CC_2_H */

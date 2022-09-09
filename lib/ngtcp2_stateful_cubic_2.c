@@ -9,6 +9,7 @@
 // #define SCUBIC2_PRINT_CC_LOG
 // #define SCUBIC2_PRINT_ACK
 // #define SCUBIC2_PRINT_RTT
+// #define SCUBIC2_PRINT_SENT
 #define FAKE_STATE
 
 #if defined(_MSC_VER)
@@ -329,13 +330,20 @@ void ngtcp2_cc_scubic2_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
 
   if (setup_phase == NGTCP2_SCUBIC2_SETUP_PHASE_INITIAL &&
       pkt->pktns_id == NGTCP2_PKTNS_ID_APPLICATION && pkt->pkt_num >= 1) {
-    uint64_t initcwnd = ngtcp2_cc_compute_initcwnd(cstat->max_udp_payload_size);
-    cstat->cwnd = ngtcp2_max(initcwnd, cstat->bytes_in_flight);
+    cstat->cwnd = cstat->bytes_in_flight;
     cstat->ssthresh = cstat->cwnd;
-    cstat->pacing_rate = 0;
+    cstat->pacing_rate = 1;
     setup_phase = NGTCP2_SCUBIC2_SETUP_PHASE_EST;
+    fprintf(stderr,
+            "----- SET ssthresh=cwnd=%" PRIu64 ", pacing_rate = 0 | ts=%" PRIu64
+            " -----\n",
+            cstat->cwnd, ts);
     fprintf(stderr, "------------ EXIT STATEFUL INITIAL ------------\n");
-    fprintf(stderr, "----- SET cwnd=%" PRIu64 " -----\n", cstat->cwnd);
+  }
+
+  if (setup_phase == NGTCP2_SCUBIC2_SETUP_PHASE_INITIAL ||
+      setup_phase == NGTCP2_SCUBIC2_SETUP_PHASE_EST) {
+    return;
   }
 
   if (pkt->pktns_id == NGTCP2_PKTNS_ID_APPLICATION && cc->window_end != -1 &&
@@ -348,11 +356,19 @@ void ngtcp2_cc_scubic2_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
   }
 
   if (setup_phase == NGTCP2_SCUBIC2_SETUP_PHASE_DRAIN) {
-    if (pkt->sent_ts > DRAIN_start_ts) {
+    if (pkt->sent_ts >= DRAIN_start_ts) {
+      cstat->cwnd = cstat->bytes_in_flight;
+      cstat->ssthresh = cstat->cwnd;
+      cstat->pacing_rate = 0;
       setup_phase = NGTCP2_SCUBIC2_SETUP_PHASE_END;
+      fprintf(stderr,
+              "----- SET ssthresh=cwnd=%" PRIu64
+              ", pacing_rate = 0 | ts=%" PRIu64 " -----\n",
+              cstat->cwnd, ts);
       fprintf(stderr, "-------------- EXIT DRAIN PHASE ---------------\n");
+    } else {
+      return;
     }
-    return;
   }
 
   /* Has something wrong with Stateful-Cubic */
@@ -500,10 +516,30 @@ void ngtcp2_cc_scubic2_cc_congestion_event(ngtcp2_cc *ccx,
     return;
   }
 
-  if (DRAIN_start_ts != UINT64_MAX && sent_ts <= DRAIN_start_ts) {
+  if (setup_phase == NGTCP2_SCUBIC2_SETUP_PHASE_INITIAL) {
     fprintf(
         stderr,
-        "packet loss but not reduce cwnd because of STATEFUL DRAIN phase\n");
+        "packet loss but not reduce cwnd because of STATEFUL INITIAL phase\n");
+    return;
+  }
+
+  if (DRAIN_start_ts != UINT64_MAX && sent_ts <= DRAIN_start_ts) {
+    cstat->cwnd = cstat->bytes_in_flight;
+    fprintf(stderr,
+            "----- SET cwnd=%" PRIu64 " | pacing_rate = %lf, ts=%" PRIu64
+            " -----\n",
+            cstat->cwnd, cstat->pacing_rate, ts);
+    fprintf(stderr, "packet loss in STATEFUL DRAIN phase\n");
+    return;
+  }
+
+  if (setup_phase == NGTCP2_SCUBIC2_SETUP_PHASE_EST) {
+    cstat->cwnd = cstat->bytes_in_flight;
+    fprintf(stderr,
+            "----- SET cwnd=%" PRIu64 " | pacing_rate = %lf, ts=%" PRIu64
+            " -----\n",
+            cstat->cwnd, cstat->pacing_rate, ts);
+    fprintf(stderr, "packet loss in STATEFUL EST phase\n");
     return;
   }
 
@@ -584,6 +620,7 @@ void ngtcp2_cc_scubic2_cc_on_persistent_congestion(ngtcp2_cc *ccx,
 
   cstat->cwnd = 2 * cstat->max_udp_payload_size;
   cstat->congestion_recovery_start_ts = UINT64_MAX;
+  fprintf(stderr, "persistent congestion cwnd=%" PRIu64 "\n", cstat->cwnd);
 }
 
 void ngtcp2_cc_scubic2_cc_on_ack_recv(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
@@ -651,14 +688,24 @@ void ngtcp2_cc_scubic2_cc_on_ack_recv(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
                 btl_bw_estimated, cstat->min_rtt, cwnd_preferred, cstat->cwnd);
       }
       fprintf(stderr, "----- RTT SAMPLES PRINTED -----\n");
+
       fprintf(stderr, "-------------- EXIT STATEFUL EST --------------\n");
       // if (cwnd_preferred < cstat->cwnd * 8 / 10) {
       if (cwnd_preferred * 2 < cstat->cwnd) {
         fprintf(stderr, "----------------- DRAIN PHASE -----------------\n");
         setup_phase = NGTCP2_SCUBIC2_SETUP_PHASE_DRAIN;
         DRAIN_start_ts = ts;
-        cstat->ssthresh = cstat->cwnd = cwnd_preferred * 2;
-        fprintf(stderr, "----- SET cwnd=%" PRIu64 " -----\n", cstat->cwnd);
+        cstat->pacing_rate = (double)btl_bw_estimated / NGTCP2_SECONDS;
+        cstat->cwnd += 2 * btl_bw_estimated * cstat->min_rtt / NGTCP2_SECONDS;
+        cstat->send_quantum = ngtcp2_max(
+            cstat->max_udp_payload_size,
+            (size_t)(5.0 * cstat->pacing_rate * NGTCP2_MILLISECONDS));
+        fprintf(stderr, "----- ESTIMATE send_quantum=%" PRIu64 " -----\n",
+                (size_t)(5.0 * cstat->pacing_rate * NGTCP2_MILLISECONDS));
+        fprintf(stderr,
+                "----- SET cwnd=%" PRIu64 ", send_quantum=%" PRIu64
+                ", pacing_rate = %lf | ts=%" PRIu64 " -----\n",
+                cstat->cwnd, cstat->send_quantum, cstat->pacing_rate, ts);
       } else {
         fprintf(stderr, "----------------- PROBE PHASE -----------------\n");
         setup_phase = NGTCP2_SCUBIC2_SETUP_PHASE_PROBE;
@@ -705,10 +752,14 @@ void ngtcp2_cc_scubic2_cc_on_ack_recv(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
 void ngtcp2_cc_scubic2_cc_on_pkt_sent(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
                                       const ngtcp2_cc_pkt *pkt) {
   ngtcp2_scubic2_cc *cc = ngtcp2_struct_of(ccx->ccb, ngtcp2_scubic2_cc, ccb);
-#ifdef SCUBIC2_PRINT_CC_LOG
-  fprintf(stderr, "pkt_sent pkn=%" PRId64 "\n", pkt->pkt_num);
-  fprintf(stderr, "delivery_rate_sec=%" PRIu64 "\n", cstat->delivery_rate_sec);
-  fprintf(stderr, "send_quantum=%" PRIu64 "\n", cstat->send_quantum);
+#ifdef SCUBIC2_PRINT_SENT
+  fprintf(stderr, "---- pkt_sent pkn=%" PRId64 "\n", pkt->pkt_num);
+  fprintf(stderr, "-- sent_ts=%" PRId64 "\n", pkt->sent_ts);
+  fprintf(stderr, "-- cwnd=%" PRId64 "; bytes_in_flight=%" PRId64 "\n",
+          cstat->cwnd, cstat->bytes_in_flight);
+  fprintf(stderr, "-- delivery_rate_sec=%" PRIu64 "\n",
+          cstat->delivery_rate_sec);
+  fprintf(stderr, "-- send_quantum=%" PRIu64 "\n", cstat->send_quantum);
 #endif
   (void)cstat;
 

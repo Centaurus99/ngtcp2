@@ -524,12 +524,12 @@ void ngtcp2_cc_scubic2_cc_congestion_event(ngtcp2_cc *ccx,
   }
 
   if (DRAIN_start_ts != UINT64_MAX && sent_ts <= DRAIN_start_ts) {
-    cstat->cwnd = cstat->bytes_in_flight;
-    fprintf(stderr,
-            "----- SET cwnd=%" PRIu64 " | pacing_rate = %lf, ts=%" PRIu64
-            " -----\n",
-            cstat->cwnd, cstat->pacing_rate, ts);
-    fprintf(stderr, "packet loss in STATEFUL DRAIN phase\n");
+    if (setup_phase == NGTCP2_SCUBIC2_SETUP_PHASE_DRAIN) {
+      fprintf(stderr,
+              "packet loss but not reduce cwnd because of DRAIN phase\n");
+    } else {
+      fprintf(stderr, "WARNING: packet sent before STATEFUL DRAIN phase lost after DRAIN phase.\n");
+    }
     return;
   }
 

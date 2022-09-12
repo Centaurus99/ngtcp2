@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import json
 import os
+import numpy as np
 
 import matplotlib as mpl
 mpl.rcParams['figure.facecolor'] = '1.0'
@@ -534,7 +535,7 @@ def collect(flow_size, rtt, bdw, mul):
     plt.savefig(os.path.join(logdir, src + '.png'))
 
 
-def analysize_congestion(flow_size, rtt, bdw, mul):
+def analysize_congestion(flow_size, rtt, bdw, mul, show_sum=True):
     src = "flow{}k_rtt{}_base{}_mul{}".format(flow_size, rtt, bdw, mul)
 
     filename1 = F1_prefix + '_' + src + F1_suffix
@@ -566,6 +567,9 @@ def analysize_congestion(flow_size, rtt, bdw, mul):
                 label='Target')
     ax[id].plot(bytes_sent_x_1, bytes_target_up_1,
                 color=colors[-3], linestyle="--")
+    if show_sum:
+        ax[id].plot(bytes_sent_x_1, np.array(bytes_sent_1) -
+                    np.array(bytes_lost_1), color=colors[-1], label='Bytes Sent')
     ax[id].plot(bytes_sent_x_1, bytes_sent_1, color=colors[0],
                 label='Bytes Sent - Lost')
     ax[id].plot(bytes_sent_x_1, bytes_sent_without_lost_1,
@@ -606,6 +610,9 @@ def analysize_congestion(flow_size, rtt, bdw, mul):
                 label='Target')
     ax[id].plot(bytes_sent_x_2, bytes_target_up_2,
                 color=colors[-3], linestyle="--")
+    if show_sum:
+        ax[id].plot(bytes_sent_x_2, np.array(bytes_sent_2) -
+                    np.array(bytes_lost_2), color=colors[-1], label='Bytes Sent')
     ax[id].plot(bytes_sent_x_2, bytes_sent_2, color=colors[0],
                 label='Bytes Sent - Lost')
     ax[id].plot(bytes_sent_x_2, bytes_sent_without_lost_2,

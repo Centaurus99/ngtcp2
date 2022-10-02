@@ -10,7 +10,7 @@
 // #define SCUBIC2_PRINT_ACK
 // #define SCUBIC2_PRINT_RTT
 // #define SCUBIC2_PRINT_SENT
-#define FAKE_STATE
+// #define FAKE_STATE
 
 #if defined(_MSC_VER)
 #  include <intrin.h>
@@ -61,8 +61,10 @@ static int hash_init(ngtcp2_conn_stat *cstat, const ngtcp2_sockaddr *sa) {
     current_state->btl_bw = 3000000;
     current_state->min_rtt = 22000000;
 #endif
-    if (current_state->address.s_addr == addr_in->sin_addr.s_addr &&
-        current_state->btl_bw != 0) {
+    // FIXME
+    // if (current_state->address.s_addr == addr_in->sin_addr.s_addr &&
+    //     current_state->btl_bw != 0) {
+    if (current_state->btl_bw != 0) {
       fprintf(stderr, "---------------- STATE  ACTIVE ----------------\n");
       fprintf(stderr,
               "----- STATE: btl_bw=%" PRIu64 "; min_rtt=%" PRIu64 "; -----\n",
@@ -75,7 +77,7 @@ static int hash_init(ngtcp2_conn_stat *cstat, const ngtcp2_sockaddr *sa) {
       INITIAL_switch_bytes_1 = ngtcp2_min(
           cstat->cwnd,
           ngtcp2_cc_compute_initcwnd(cstat->max_udp_payload_size) * 2);
-      INITIAL_switch_bytes_2 = INITIAL_switch_bytes_1 * 3 / 4;
+      INITIAL_switch_bytes_2 = INITIAL_switch_bytes_1 / 2;
       cstat->pacing_rate = 2 * (double)current_state->btl_bw / NGTCP2_SECONDS;
 
       fprintf(stderr, "----- SET cwnd=%" PRIu64 " -----\n", cstat->cwnd);

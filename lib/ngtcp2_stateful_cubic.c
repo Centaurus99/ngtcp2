@@ -8,7 +8,7 @@
 
 // #define SCUBIC_PRINT_CC_LOG
 // #define SCUBIC_PRINT_ACK
-#define FAKE_STATE
+// #define FAKE_STATE
 
 #if defined(_MSC_VER)
 #  include <intrin.h>
@@ -55,8 +55,10 @@ static int hash_init(ngtcp2_conn_stat *cstat, const ngtcp2_sockaddr *sa) {
     current_state->btl_bw = 3000000;
     current_state->min_rtt = 22000000;
 #endif
-    if (current_state->address.s_addr == addr_in->sin_addr.s_addr &&
-        current_state->btl_bw != 0) {
+    // FIXME
+    // if (current_state->address.s_addr == addr_in->sin_addr.s_addr &&
+    //     current_state->btl_bw != 0) {
+    if (current_state->btl_bw != 0) {
       fprintf(stderr, "---------------- STATE  ACTIVE ----------------\n");
       fprintf(stderr,
               "----- STATE: btl_bw=%" PRIu64 "; min_rtt=%" PRIu64 "; -----\n",

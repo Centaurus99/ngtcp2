@@ -2391,7 +2391,7 @@ Options:
               Exit when all client initiated HTTP streams are closed.
   --disable-early-data
               Disable early data.
-  --cc=(cubic|reno|bbr|bbr2|scubic|scubic2)
+  --cc=(cubic|reno|bbr|bbr2|scubic|scubic2|fixed)
               The name of congestion controller algorithm.
               Default: )"
             << util::strccalgo(config.cc_algo) << R"(
@@ -2765,8 +2765,13 @@ int main(int argc, char **argv) {
           config.cc_algo = NGTCP2_CC_ALGO_SCUBIC_2;
           break;
         }
-        std::cerr << "cc: specify cubic, reno, bbr, bbr2, scubic or scubic2"
-                  << std::endl;
+        if (strcmp("fixed", optarg) == 0) {
+          config.cc_algo = NGTCP2_CC_ALGO_FIXED;
+          break;
+        }
+        std::cerr
+            << "cc: specify cubic, reno, bbr, bbr2, scubic, scubic2 or fixed"
+            << std::endl;
         exit(EXIT_FAILURE);
       case 28:
         // --exit-on-all-streams-close

@@ -1684,7 +1684,11 @@ typedef enum ngtcp2_cc_algo {
   /**
    * :enum:`NGTCP2_CC_ALGO_SCUBIC_2` represents Stateful Cubic 2.
    */
-  NGTCP2_CC_ALGO_SCUBIC_2 = 0x05
+  NGTCP2_CC_ALGO_SCUBIC_2 = 0x05,
+  /**
+   * :enum:`NGTCP2_CC_ALGO_FIXED` represents fixed bandwidth.
+   */
+  NGTCP2_CC_ALGO_FIXED = 0x06
 } ngtcp2_cc_algo;
 
 /**

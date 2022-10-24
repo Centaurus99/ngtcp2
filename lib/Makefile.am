@@ -60,6 +60,7 @@ OBJECTS = \
 	ngtcp2_cid.c \
 	ngtcp2_ksl.c \
 	ngtcp2_cc.c \
+	ngtcp2_cc_fixed.c \
 	ngtcp2_bbr.c \
 	ngtcp2_bbr2.c \
 	ngtcp2_stateful_cubic.c \
@@ -101,6 +102,7 @@ HFILES = \
 	ngtcp2_cid.h \
 	ngtcp2_ksl.h \
 	ngtcp2_cc.h \
+	ngtcp2_cc_fixed.h \
 	ngtcp2_bbr.h \
 	ngtcp2_bbr2.h \
 	ngtcp2_stateful_cubic.h \

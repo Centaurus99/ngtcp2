@@ -8,17 +8,18 @@ import time
 basedir = "./run/work"
 run_file = "./run/worker.sh"
 
-if (os.path.exists(os.path.join(basedir, "threads")) == False):
-    os.mkdir(os.path.join(basedir, "threads"))
+if (os.path.exists(os.path.join(basedir, "threads", "logs")) == False):
+    os.makedirs(os.path.join(basedir, "threads", "logs"))
 
 BASE_BW_MUL_list = [2]
-DATA_SIZE_KB_list = [128]
+DATA_SIZE_KB_list = [1024]
 loss_list = [0.0]
 DELAY_1_list = [20]
 DELAY_2_list = DELAY_1_list
 bw_mul_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,
                1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
-cc_list = ['scubic', 'scubic2']
+cc_list = ['cubic', 'scubic', 'scubic2']
+# cc_list = ['fixed']
 port_range = [40200, 40220]
 repeats = 10
 
@@ -29,7 +30,7 @@ class Worker(threading.Thread):
         self.queue = queue
         self.port = port
         self.logfile = os.path.join(
-            basedir, "threads", "worker{}.log".format(self.port))
+            basedir, "threads", "logs", "worker{}.log".format(self.port))
         os.system('date +"%Y-%m-%d %H:%M:%S" > {}'.format(self.logfile))
 
     def run(self):

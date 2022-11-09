@@ -35,6 +35,7 @@
 #include "ngtcp2_addr.h"
 #include "ngtcp2_path.h"
 #include "ngtcp2_rcvry.h"
+#include "ngtcp2_bwestimate.h"
 
 /* NGTCP2_FLOW_WINDOW_RTT_FACTOR is the factor of RTT when flow
    control window auto-tuning is triggered. */
@@ -1172,6 +1173,7 @@ static int conn_new(ngtcp2_conn **pconn, const ngtcp2_cid *dcid,
   ngtcp2_rst_init(&(*pconn)->rst);
 
   (*pconn)->cc_algo = settings->cc_algo;
+  ngtcp2_bwest_init(*pconn, &(*pconn)->bwest, &(*pconn)->log);
 
   switch (settings->cc_algo) {
   case NGTCP2_CC_ALGO_RENO:
@@ -1211,14 +1213,14 @@ static int conn_new(ngtcp2_conn **pconn, const ngtcp2_cid *dcid,
     break;
   case NGTCP2_CC_ALGO_SCUBIC_2:
     rv = ngtcp2_cc_scubic2_cc_init(&(*pconn)->cc, &(*pconn)->log,
-                                  &(*pconn)->cstat, mem, path);
+                                   &(*pconn)->cstat, mem, path);
     if (rv != 0) {
       goto fail_cc_init;
     }
     break;
   case NGTCP2_CC_ALGO_FIXED:
     rv = ngtcp2_cc_fixed_cc_init(&(*pconn)->cc, &(*pconn)->log,
-                                  &(*pconn)->cstat, mem, path);
+                                 &(*pconn)->cstat, mem, path);
     if (rv != 0) {
       goto fail_cc_init;
     }

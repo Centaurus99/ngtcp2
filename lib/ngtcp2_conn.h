@@ -347,6 +347,43 @@ typedef enum ngtcp2_ecn_state {
   NGTCP2_ECN_STATE_CAPABLE,
 } ngtcp2_ecn_state;
 
+
+typedef struct ngtcp2_bw_estimate {
+  ngtcp2_log *log;
+  /* BBR's estimated bottleneck bandwidth available to the
+     transport flow, estimated from the maximum delivery rate sample in a
+     sliding window. */
+  uint64_t btl_bw;
+  uint64_t max_btl_bw;
+  /* The max filter used to estimate BBR.BtlBw. */
+  ngtcp2_window_filter max_btl_bw_filter;
+  ngtcp2_window_filter btl_bw_filter;
+  uint64_t round_count;
+  uint64_t max_round_count;
+
+  /* Westwood btl_bw*/
+  uint64_t bw_est;
+  uint64_t max_bw_est;
+  ngtcp2_window_filter max_bw_est_filter;
+  uint64_t bw_ns_est;
+  uint64_t bw_est_acked_data;
+  ngtcp2_tstamp last_bw_est_time;
+  uint64_t westwood_round_count;
+
+  /* gcbe */
+  uint64_t smooth_btl_bw_max;
+  ngtcp2_tstamp circle_start_ts;
+  ngtcp2_tstamp circle_end_ts;
+  ngtcp2_duration circle_max_duration;
+  uint64_t smooth_btl_bw[5];
+  uint64_t bytes_acked_sum;
+  uint64_t bytes_to_drop;
+  uint64_t max_gcbe_bw;
+  ngtcp2_window_filter max_gcbe_bw_filter;
+  uint64_t gcbe_round_count;
+
+} ngtcp2_bw_estimate;
+
 ngtcp2_static_ringbuf_def(dcid_bound, NGTCP2_MAX_BOUND_DCID_POOL_SIZE,
                           sizeof(ngtcp2_dcid));
 ngtcp2_static_ringbuf_def(dcid_unused, NGTCP2_MAX_DCID_POOL_SIZE,
@@ -680,6 +717,7 @@ struct ngtcp2_conn {
   ngtcp2_rst rst;
   ngtcp2_cc_algo cc_algo;
   ngtcp2_cc cc;
+  ngtcp2_bw_estimate bwest;
   const ngtcp2_mem *mem;
   /* idle_ts is the time instant when idle timer started. */
   ngtcp2_tstamp idle_ts;

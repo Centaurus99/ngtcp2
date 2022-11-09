@@ -34,6 +34,7 @@
 #include "ngtcp2_cc.h"
 #include "ngtcp2_rcvry.h"
 #include "ngtcp2_rst.h"
+#include "ngtcp2_bwestimate.h"
 
 int ngtcp2_frame_chain_new(ngtcp2_frame_chain **pfrc, const ngtcp2_mem *mem) {
   *pfrc = ngtcp2_mem_malloc(mem, sizeof(ngtcp2_frame_chain));
@@ -1115,6 +1116,7 @@ ngtcp2_ssize ngtcp2_rtb_recv_ack(ngtcp2_rtb *rtb, const ngtcp2_ack *fr,
 
   cc_ack.largest_acked_sent_ts = largest_acked_sent_ts;
   cc->on_ack_recv(cc, cstat, &cc_ack, ts);
+  ngtcp2_bwest_on_ack_recv(&conn->bwest, cstat, &cc_ack, ts);
 
   return num_acked;
 

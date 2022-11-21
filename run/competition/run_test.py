@@ -41,25 +41,3 @@ with open(bw_est_logfile, 'a') as f_bw_est:
                 "bw_est={:.2f} Mbits/s".format(bw_est_list[-1]))
             f_bw_est.write(json.dumps(bw_est_list) + '\n')
             f_bw_est.flush()
-
-
-def collect(log_file):
-    ts = []
-    delivery_rate = []
-    BBR_btl_bw = []
-    BBR_max_btl_bw = []
-    WestWood_bw_est = []
-    WestWood_max_bw_est = []
-    GCBE_smooth_btl_bw_max = []
-    GCBE_max_gcbe_bw = []
-    with open(log_file, 'r') as f:
-        lines = f.readlines()
-        for line in lines:
-            if line.startswith("rtt_samples"):
-                if (line.startswith("rtt_samples[0]")):
-                    continue
-                bw_est = float(re.findall(
-                    r"btl_bw_estimated=([0-9.]+)", line)[0])
-                bw_est = round(
-                    8 * bw_est / 1000 / 1000, 6)
-                bw_est_list.append(bw_est)

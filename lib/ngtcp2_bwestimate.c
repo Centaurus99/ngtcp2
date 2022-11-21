@@ -69,10 +69,12 @@ void ngtcp2_bwest_on_ack_recv(ngtcp2_bw_estimate *bwest,
 
 #ifdef SCUBIC2_PRINT_BW_EST
   fprintf(stderr,
-          "-- delivery_rate=%" PRIu64 " BBR btl_bw=%" PRIu64 " max_btl_bw=%" PRIu64
-          " westwood bw_est=%" PRIu64 " max_bw_est=%" PRIu64
-          " gcbe smooth_btl_bw_max=%" PRIu64 " max_gcbe_bw=%" PRIu64 " --\n",
-          cstat->delivery_rate_sec, bwest->btl_bw, bwest->max_btl_bw,
+          "-- BWEST: ts=%" PRIu64 " delivery_rate=%" PRIu64
+          " BBR_btl_bw=%" PRIu64 " BBR_max_btl_bw=%" PRIu64
+          " WestWood_bw_est=%" PRIu64 " WestWood_max_bw_est=%" PRIu64
+          " GCBE_smooth_btl_bw_max=%" PRIu64 " GCBE_max_gcbe_bw=%" PRIu64
+          " --\n",
+          ts, cstat->delivery_rate_sec, bwest->btl_bw, bwest->max_btl_bw,
           bwest->bw_est, bwest->max_bw_est, bwest->smooth_btl_bw_max,
           bwest->max_gcbe_bw);
 #endif
@@ -170,27 +172,17 @@ void ngtcp2_bwest_on_ack_recv_gcbe(ngtcp2_bw_estimate *bwest,
   bwest->circle_end_ts = ts;
 
   if (bwest->circle_end_ts - bwest->circle_start_ts >= cstat->smoothed_rtt) {
-
-#ifdef SCUBIC2_PRINT_CC_LOG
-    fprintf(stderr,
-            "----- BTL_BW UPDATE; circle_start_ts=%" PRIu64
-            "; circle_end_ts=%" PRIu64 "; bytes_acked_sum=%" PRIu64
-            "; bytes_to_drop=%" PRIu64 "; circle_max_duration=%" PRIu64
-            " -----\n",
-            circle_start_ts, circle_end_ts, bytes_acked_sum, bytes_to_drop,
-            circle_max_duration);
-#endif
-
-    if (bwest->bytes_acked_sum == bwest->bytes_to_drop) {
-      update_smooth_btl_bw(bwest,
-                           bwest->bytes_acked_sum * NGTCP2_SECONDS /
-                               (bwest->circle_end_ts - bwest->circle_start_ts));
-    } else {
+    if (bwest->circle_end_ts - bwest->circle_start_ts -
+        bwest->circle_max_duration) {
       update_smooth_btl_bw(bwest,
                            (bwest->bytes_acked_sum - bwest->bytes_to_drop) *
                                NGTCP2_SECONDS /
                                (bwest->circle_end_ts - bwest->circle_start_ts -
                                 bwest->circle_max_duration));
+    } else {
+      update_smooth_btl_bw(bwest,
+                           bwest->bytes_acked_sum * NGTCP2_SECONDS /
+                               (bwest->circle_end_ts - bwest->circle_start_ts));
     }
     bwest->bytes_acked_sum = 0;
     bwest->bytes_to_drop = 0;

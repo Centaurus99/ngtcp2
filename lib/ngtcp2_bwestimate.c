@@ -9,7 +9,7 @@
 #define NGTCP2_WESTWOOD_RTT_MIN 50000000 // ns, probe RTT period
 #define NGTCP2_WESTWOOD_BTL_BW_FILTERLEN (1 * NGTCP2_SECONDS)
 #define BD_SMOOOTH_SIZE 5
-#define SCUBIC2_PRINT_BW_EST
+// #define SCUBIC2_PRINT_BW_EST
 
 void ngtcp2_bwest_init(ngtcp2_conn *conn, ngtcp2_bw_estimate *bwest,
                        ngtcp2_log *log) {

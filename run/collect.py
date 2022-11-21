@@ -10,10 +10,10 @@ mpl.rcParams['axes.facecolor'] = '1.0'
 
 colors = sns.color_palette('deep')
 
-logdir = "./run/logs/server_log"
+logdir = "./run/work/worker_final"
 
-flow_list = [128]
-rtt_list = [20]
+flow_list = [1024]
+rtt_list = [40]
 BDW_list = [24]
 mul_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,
             1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
@@ -21,9 +21,9 @@ mul_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,
 F1 = 'S-CUBIC'
 F2 = 'S-CUBIC2'
 F1_prefix = 'scubic'
-F1_suffix = '_2.sqlog'
+F1_suffix = '1_2.sqlog'
 F2_prefix = 'scubic2'
-F2_suffix = '_2.sqlog'
+F2_suffix = '1_2.sqlog'
 
 
 def get_offset(ax_, x, y):
@@ -219,16 +219,19 @@ def load_qlog_analysize_congestion(logdir, filename, rtt, bdw, mul):
 
 
 def collect(flow_size, rtt, bdw, mul):
-    src = "flow{}k_rtt{}_base{}_mul{}".format(flow_size, rtt, bdw, mul)
+    name = "flow{}k_rtt{}to{}_bw{}_bw_mul{}_loss{}".format(
+        flow_size, rtt, rtt, bdw, mul, 0.0)
 
-    filename1 = F1_prefix + '_' + src + F1_suffix
-    filename2 = F2_prefix + '_' + src + F2_suffix
+    filename1 = "{}_flow{}k_rtt{}to{}_bw{}_bw_mul{}_loss{}".format(
+        F1_prefix, flow_size, rtt, rtt, bdw, mul, 0.0)
+    filename2 = "{}_flow{}k_rtt{}to{}_bw{}_bw_mul{}_loss{}".format(
+        F2_prefix, flow_size, rtt, rtt, bdw, mul, 0.0)
 
     x_1, smoothed_rtt_1, latest_rtt_1, congestion_window_1, bytes_in_flight_1, ssthresh_x_1, ssthresh_1, packet_lost_1 = load_qlog_basic(
-        logdir, filename1)
+        os.path.join(logdir, filename1), F1_suffix)
 
     x_2, smoothed_rtt_2, latest_rtt_2, congestion_window_2, bytes_in_flight_2, ssthresh_x_2, ssthresh_2, packet_lost_2 = load_qlog_basic(
-        logdir, filename2)
+        os.path.join(logdir, filename2), F2_suffix)
 
     fig, ax = plt.subplots(
         nrows=10,
@@ -237,8 +240,11 @@ def collect(flow_size, rtt, bdw, mul):
     fig.set_figwidth(15)
     fig.set_figheight(40)
     fig.suptitle(
-        "RTT: {} ms; BDP: {:.0f} Bytes -> {:.0f} Bytes; Bandwidth: {} Mbps -> {:.1f} Mbps ({:.0%})".format(
-            rtt, bdw * rtt * 125, bdw * mul * rtt * 125, bdw, bdw * mul, mul), fontsize=20)
+        "RTT: {} ms -> {} ms; BDP: {:.0f} Bytes -> {:.0f} Bytes; Bandwidth: {} Mbps -> {:.1f} Mbps ({:.0%})".format(
+            rtt, rtt, bdw * rtt * 125, bdw * mul * rtt * 125, bdw, bdw * mul, mul), fontsize=20)
+    # fig.suptitle(
+    #     "RTT: {} ms; BDP: {:.0f} Bytes -> {:.0f} Bytes; Bandwidth: {} Mbps -> {:.1f} Mbps ({:.0%})".format(
+    #         rtt, bdw * rtt * 125, bdw * mul * rtt * 125, bdw, bdw * mul, mul), fontsize=20)
     id = 0
 
     # ----- F1 vs F2: CWnd and Packet Lost -----
@@ -532,20 +538,23 @@ def collect(flow_size, rtt, bdw, mul):
 
     plt.tight_layout()
     plt.subplots_adjust(hspace=0.3, top=0.95)
-    plt.savefig(os.path.join(logdir, src + '.png'))
+    plt.savefig(os.path.join(logdir, name + '.png'))
 
 
 def analysize_congestion(flow_size, rtt, bdw, mul, show_sum=True):
-    src = "flow{}k_rtt{}_base{}_mul{}".format(flow_size, rtt, bdw, mul)
+    name = "flow{}k_rtt{}to{}_bw{}_bw_mul{}_loss{}".format(
+        flow_size, rtt, rtt, bdw, mul, 0.0)
 
-    filename1 = F1_prefix + '_' + src + F1_suffix
-    filename2 = F2_prefix + '_' + src + F2_suffix
+    filename1 = "{}_flow{}k_rtt{}to{}_bw{}_bw_mul{}_loss{}".format(
+        F1_prefix, flow_size, rtt, rtt, bdw, mul, 0.0)
+    filename2 = "{}_flow{}k_rtt{}to{}_bw{}_bw_mul{}_loss{}".format(
+        F2_prefix, flow_size, rtt, rtt, bdw, mul, 0.0)
 
     x_1,  bytes_sent_x_1, bytes_sent_1, bytes_sent_without_lost_1, bytes_lost_early_1, bytes_lost_1, bytes_target_1, bytes_target_up_1, limit_by_sent_x_1, limit_by_sent_1 = load_qlog_analysize_congestion(
-        logdir, filename1, rtt, bdw, mul)
+        os.path.join(logdir, filename1), F1_suffix, rtt, bdw, mul)
 
     x_2,  bytes_sent_x_2, bytes_sent_2, bytes_sent_without_lost_2, bytes_lost_early_2, bytes_lost_2, bytes_target_2, bytes_target_up_2, limit_by_sent_x_2, limit_by_sent_2 = load_qlog_analysize_congestion(
-        logdir, filename2, rtt, bdw, mul)
+        os.path.join(logdir, filename2), F2_suffix, rtt, bdw, mul)
 
     fig, ax = plt.subplots(
         nrows=2
@@ -553,8 +562,8 @@ def analysize_congestion(flow_size, rtt, bdw, mul, show_sum=True):
     fig.set_figwidth(15)
     fig.set_figheight(20)
     fig.suptitle(
-        "RTT: {} ms; BDP: {:.0f} Bytes -> {:.0f} Bytes; Bandwidth: {} Mbps -> {:.1f} Mbps ({:.0%})".format(
-            rtt, bdw * rtt * 125, bdw * mul * rtt * 125, bdw, bdw * mul, mul), fontsize=20)
+        "RTT: {} ms -> {} ms; BDP: {:.0f} Bytes -> {:.0f} Bytes; Bandwidth: {} Mbps -> {:.1f} Mbps ({:.0%})".format(
+            rtt, rtt, bdw * rtt * 125, bdw * mul * rtt * 125, bdw, bdw * mul, mul), fontsize=20)
     id = 0
 
     # ----- F1: Analysis -----
@@ -645,7 +654,8 @@ def analysize_congestion(flow_size, rtt, bdw, mul, show_sum=True):
 
     plt.tight_layout()
     plt.subplots_adjust(hspace=0.15, top=0.93)
-    plt.savefig(os.path.join(logdir, src + '_analysis.png'))
+    plt.savefig(os.path.join(logdir, name + '_analysis.png'))
+    print((x_2[-1], bytes_lost_2[-1]))
 
 
 for flow_size in flow_list:

@@ -8,7 +8,7 @@
 
 // #define SCUBIC2_PRINT_CC_LOG
 // #define SCUBIC2_PRINT_ACK
-// #define SCUBIC2_PRINT_RTT
+#define SCUBIC2_PRINT_RTT
 // #define SCUBIC2_PRINT_SENT
 // #define FAKE_STATE
 
@@ -30,6 +30,7 @@ static ngtcp2_scubic2_state *current_state;
 static ngtcp2_scubic2_setup_phase setup_phase;
 static uint64_t DRAIN_start_ts, DRAIN_bytes_to_sent, EST_bytes_to_sent,
     EST_cwnd_preferred;
+static uint64_t PROBE_cwnd_base, PROBE_rate_mul = 1;
 static uint64_t INITIAL_btl_bw, INITIAL_switch_bytes_1, INITIAL_switch_bytes_2;
 
 static size_t hash_address(const ngtcp2_sockaddr *sa) {
@@ -59,7 +60,7 @@ static int hash_init(ngtcp2_conn_stat *cstat, const ngtcp2_sockaddr *sa) {
 #ifdef FAKE_STATE
     current_state->address.s_addr = addr_in->sin_addr.s_addr;
     current_state->btl_bw = 3000000;
-    current_state->min_rtt = 22000000;
+    current_state->min_rtt = 42000000;
 #endif
     // FIXME
     // if (current_state->address.s_addr == addr_in->sin_addr.s_addr &&
@@ -373,7 +374,13 @@ void ngtcp2_cc_scubic2_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
 
   if (cstat->cwnd < cstat->ssthresh) {
     /* slow-start */
-    cstat->cwnd += pkt->pktlen;
+
+    if (setup_phase == NGTCP2_SCUBIC2_SETUP_PHASE_PROBE) {
+      cstat->cwnd += pkt->pktlen * (EST_cwnd_preferred - PROBE_cwnd_base) *
+                     PROBE_rate_mul / PROBE_cwnd_base;
+    } else {
+      cstat->cwnd += pkt->pktlen;
+    }
 
     ngtcp2_log_info(cc->ccb.log, NGTCP2_LOG_EVENT_RCV,
                     "pkn=%" PRId64 " acked, slow start cwnd=%" PRIu64,
@@ -402,6 +409,10 @@ void ngtcp2_cc_scubic2_cc_on_pkt_acked(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
 
         cc->w_last_max = cstat->cwnd;
         cstat->ssthresh = cstat->cwnd;
+        if (setup_phase == NGTCP2_SCUBIC2_SETUP_PHASE_PROBE) {
+          setup_phase = NGTCP2_SCUBIC2_SETUP_PHASE_END;
+          fprintf(stderr, "-------------- EXIT PROBE PHASE ---------------\n");
+        }
       }
     }
     return;
@@ -544,6 +555,15 @@ void ngtcp2_cc_scubic2_cc_congestion_event(ngtcp2_cc *ccx,
         fprintf(stderr, "------------ SWITCH TO PROBE PHASE ------------\n");
         setup_phase = NGTCP2_SCUBIC2_SETUP_PHASE_PROBE;
         cstat->ssthresh = UINT64_MAX;
+        PROBE_cwnd_base = cstat->cwnd;
+        fprintf(stderr,
+                "----- SET PROBE_cwnd_base = %" PRIu64
+                ", rate = %lf | EST_cwnd_preferred=%" PRIu64 ", ts=%" PRIu64
+                " -----\n",
+                PROBE_cwnd_base,
+                (double)(EST_cwnd_preferred - PROBE_cwnd_base) *
+                    (double)PROBE_rate_mul / (double)PROBE_cwnd_base,
+                EST_cwnd_preferred, ts);
       }
     } else if (setup_phase == NGTCP2_SCUBIC2_SETUP_PHASE_PROBE) {
       // cstat->cwnd = cstat->bytes_in_flight + PROBE_bytes_to_sent;
@@ -562,6 +582,11 @@ void ngtcp2_cc_scubic2_cc_congestion_event(ngtcp2_cc *ccx,
                       "after DRAIN phase.\n");
     }
     return;
+  }
+
+  if (setup_phase == NGTCP2_SCUBIC2_SETUP_PHASE_PROBE) {
+    setup_phase = NGTCP2_SCUBIC2_SETUP_PHASE_END;
+    fprintf(stderr, "-------------- EXIT PROBE PHASE ---------------\n");
   }
 
   if (cc->prior.cwnd < cstat->cwnd) {
@@ -757,6 +782,15 @@ void ngtcp2_cc_scubic2_cc_on_ack_recv(ngtcp2_cc *ccx, ngtcp2_conn_stat *cstat,
         setup_phase = NGTCP2_SCUBIC2_SETUP_PHASE_PROBE;
         DRAIN_start_ts = UINT64_MAX;
         cstat->ssthresh = UINT64_MAX;
+        PROBE_cwnd_base = cstat->cwnd;
+        fprintf(stderr,
+                "----- SET PROBE_cwnd_base = %" PRIu64
+                ", rate = %lf | EST_cwnd_preferred=%" PRIu64 ", ts=%" PRIu64
+                " -----\n",
+                PROBE_cwnd_base,
+                (double)(EST_cwnd_preferred - PROBE_cwnd_base) *
+                    (double)PROBE_rate_mul / (double)PROBE_cwnd_base,
+                EST_cwnd_preferred, ts);
       }
     }
   } else if (setup_phase == NGTCP2_SCUBIC2_SETUP_PHASE_DRAIN) {
